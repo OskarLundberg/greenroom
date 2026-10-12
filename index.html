@@ -215,13 +215,13 @@ h2{font-family:var(--display);font-weight:700;font-size:20px;letter-spacing:-.01
     <aside class="bins">
       <section>
         <div class="bin-head"><h2>Videos</h2><label class="btn primary small" for="videoInput" tabindex="0">Add videos</label></div>
-        <input id="videoInput" type="file" accept="video/*,.mkv,.mp4,.webm,.mov" multiple hidden>
+        <input id="videoInput" type="file" accept="video/*,image/*,.mkv,.mp4,.webm,.mov,.jpg,.jpeg,.png,.webp" multiple hidden>
         <ul class="vlist" id="videoList"></ul>
-        <p class="fine">Videos play straight from the headset's storage. Nothing is uploaded.</p>
+        <p class="fine">Videos play straight from the headset's storage. Nothing is uploaded. Pictures picked here are added to Backdrops.</p>
       </section>
       <section>
         <div class="bin-head"><h2>Backdrops</h2><label class="btn small" for="imageInput" tabindex="0">Add pictures</label></div>
-        <input id="imageInput" type="file" accept="image/*" multiple hidden>
+        <input id="imageInput" type="file" accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.avif" multiple hidden>
         <div class="bggrid" id="bgGrid"></div>
         <p class="fine">Pictures you add are kept in this browser, so they're here next time. Wide 2:1 panoramas wrap all the way around; other photos hang as a wall.</p>
       </section>
@@ -607,16 +607,28 @@ function addBuiltinBg(id, name, make) {
   const c = make();
   bgs.push({ id, name, kind: 'builtin', tex: bgTexture(c), aspect: c.width / c.height, avg: averageColor(c), thumb: thumbOf(c) });
 }
+const IMG_EXT = /\.(jpe?g|png|webp|gif|bmp|avif|heic|heif|tiff?)$/i;
+const isImageFile = (f) => (f.type && f.type.startsWith('image/')) || IMG_EXT.test(f.name || '');
+const isHeic = (f) => /image\/hei[cf]/i.test(f.type || '') || /\.hei[cf]$/i.test(f.name || '');
 async function bgFromBlob(blob, name, id, kind) {
+  if (isHeic(blob)) throw new Error('heic');
   const url = URL.createObjectURL(blob);
-  const img = new Image(); img.decoding = 'async'; img.src = url;
-  await img.decode();
-  let w = img.naturalWidth, h = img.naturalHeight, src = img;
-  if (w > maxTex || h > maxTex) {
-    const s = maxTex / Math.max(w, h); const c = document.createElement('canvas');
-    c.width = Math.round(w * s); c.height = Math.round(h * s); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); src = c;
+  let src = null, w = 0, h = 0;
+  try {
+    const img = new Image(); img.decoding = 'async';
+    await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error('decode')); img.src = url; });
+    w = img.naturalWidth; h = img.naturalHeight; src = img;
+    if (w > maxTex || h > maxTex) {
+      const s = maxTex / Math.max(w, h), rw = Math.round(w * s), rh = Math.round(h * s);
+      try { src = await createImageBitmap(blob, { resizeWidth: rw, resizeHeight: rh, resizeQuality: 'high' }); }
+      catch (e) { const c = document.createElement('canvas'); c.width = rw; c.height = rh; c.getContext('2d').drawImage(img, 0, 0, rw, rh); src = c; }
+    }
+  } catch (e) {
+    // Very large pictures can fail to load whole on the headset; ask for a scaled-down decode instead.
+    src = await createImageBitmap(blob, { resizeWidth: maxTex, resizeQuality: 'high' }).catch(() => { throw new Error('decode'); });
+    w = src.width; h = src.height;
   }
-  return { id, name, kind, tex: bgTexture(src), aspect: w / h, avg: averageColor(img), thumb: thumbOf(img), url };
+  return { id, name, kind, tex: bgTexture(src), aspect: w / h, avg: averageColor(src), thumb: thumbOf(src), url };
 }
 bgs.push({ id: 'none', name: 'None', kind: 'builtin', tex: null, aspect: 2, avg: [0.043, 0.051, 0.063], thumb: null });
 addBuiltinBg('dusk', 'Dusk ridge', makeDusk);
@@ -869,18 +881,28 @@ async function removeBg(b) {
   if (S.bgId === b.id) setS({ bgId: 'dusk' }); else renderBgGrid();
 }
 async function addImages(files) {
-  let last = null;
+  let last = null, added = 0;
   for (const f of files) {
     const id = 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-    try { const b = await bgFromBlob(f, f.name.replace(/\.[^.]+$/, ''), id, 'user'); bgs.push(b); last = b; await idb.put({ id, name: b.name, blob: f, added: Date.now() }); }
-    catch (e) { toast('Couldn’t open ' + f.name + '.'); }
+    try { const b = await bgFromBlob(f, f.name.replace(/\.[^.]+$/, ''), id, 'user'); bgs.push(b); last = b; added++; await idb.put({ id, name: b.name, blob: f, added: Date.now() }); }
+    catch (e) {
+      toast(e && e.message === 'heic'
+        ? f.name + ' is an iPhone HEIC photo, which the browser can’t open. Save it as JPG and add it again.'
+        : 'Couldn’t open ' + f.name + '. Save it as JPG or PNG and add it again.', 6000);
+    }
   }
-  if (last) setS({ bgId: last.id }); else renderBgGrid();
+  if (last) { setS({ bgId: last.id }); toast(added === 1 ? 'Backdrop added: ' + last.name : added + ' backdrops added'); }
+  else renderBgGrid();
+}
+function addAny(files) {
+  const imgs = files.filter(isImageFile), vids = files.filter(f => !isImageFile(f));
+  if (vids.length) addFiles(vids);
+  if (imgs.length) addImages(imgs);
 }
 
 // wire 2D controls
-$('videoInput').addEventListener('change', (e) => { addFiles([...e.target.files]); e.target.value = ''; });
-$('imageInput').addEventListener('change', (e) => { addImages([...e.target.files]); e.target.value = ''; });
+$('videoInput').addEventListener('change', (e) => { addAny([...e.target.files]); e.target.value = ''; });
+$('imageInput').addEventListener('change', (e) => { addAny([...e.target.files]); e.target.value = ''; });
 for (const id of ['videoInput', 'imageInput']) {
   const lab = document.querySelector(`label[for="${id}"]`);
   lab.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $(id).click(); } });
@@ -1165,7 +1187,13 @@ renderer.setAnimationLoop(() => {
 async function boot() {
   const saved = await idb.all();
   saved.sort((a, b) => (a.added || 0) - (b.added || 0));
-  for (const rec of saved) { try { bgs.push(await bgFromBlob(rec.blob, rec.name, rec.id, 'user')); } catch (e) { } }
+  for (const rec of saved) {
+    try {
+      bgs.push(await bgFromBlob(rec.blob, rec.name, rec.id, 'user'));
+      renderBgGrid();
+      if (rec.id === S.bgId) { apply(); syncControls(); panelDirty = true; }
+    } catch (e) { }
+  }
   // Optional: pictures shipped next to this page in backgrounds/list.json (["file.jpg", ...])
   try {
     const r = await fetch('backgrounds/list.json', { cache: 'no-cache' });
