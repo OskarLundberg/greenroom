@@ -1,0 +1,1187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Greenroom VR</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: studio console. Preview monitor with its tuning desk on the left, the two bins (videos, backdrops) on the right; stacks to one column on narrow screens. Deliberately single dark theme: it is used inside a headset. */
+:root{
+  --bg:#0f1216;
+  --panel:#161a20;
+  --panel-2:#1d222a;
+  --line:#2a303a;
+  --fg:#ebe7df;
+  --muted:#939aa5;
+  --key:#39c47c;
+  --key-hi:#5ad796;
+  --key-ink:#06160d;
+  --key-tint:rgba(57,196,124,.14);
+  --blue:#6c95ff;
+  --warn:#e3a54c;
+  --check-a:#262b33;
+  --check-b:#1b1f25;
+  --display:"Bricolage Grotesque","Segoe UI",system-ui,sans-serif;
+  --body:"Figtree","Segoe UI",system-ui,-apple-system,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",Menlo,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:15px/1.5 var(--body);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1320px;margin:0 auto;padding-inline:clamp(16px,3vw,36px);padding-block:max(18px,env(safe-area-inset-top,0px)) 56px}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--key-hi);outline-offset:2px}
+
+/* Header */
+.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px 24px;padding-bottom:18px;border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:14px;min-width:0}
+.mark{width:44px;height:44px;border-radius:10px;flex:none;background:
+  linear-gradient(135deg,transparent 50%,var(--key) 50%),
+  repeating-conic-gradient(var(--check-a) 0 25%,var(--check-b) 0 50%) 0 0/11px 11px;border:1px solid var(--line)}
+h1{font-family:var(--display);font-weight:800;font-size:clamp(28px,4vw,38px);line-height:1;letter-spacing:-.02em;margin:0}
+.tag{margin:6px 0 0;color:var(--muted);max-width:60ch;font-size:14px}
+.enter{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.note{font-size:13px;color:var(--muted);max-width:44ch;text-align:right}
+.note.warn{color:var(--warn)}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:8px 13px;font-weight:600;font-size:14px;cursor:pointer;white-space:nowrap;transition:background .15s,border-color .15s}
+.btn:hover{background:#262c36;border-color:#3a414d}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.primary{background:var(--key);border-color:var(--key);color:var(--key-ink)}
+.btn.primary:hover{background:var(--key-hi);border-color:var(--key-hi)}
+.btn.xl{font-size:17px;padding:12px 22px;border-radius:10px}
+.btn.ghost{background:transparent}
+.btn.small{padding:5px 10px;font-size:13px}
+
+/* Grid */
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:28px;margin-top:24px;align-items:start}
+@media (max-width:960px){.grid{grid-template-columns:minmax(0,1fr)}}
+
+/* Monitor */
+.screen{position:relative;aspect-ratio:16/9;max-width:100%;border-radius:14px;overflow:hidden;background:#000;border:1px solid var(--line)}
+.screen canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+.screen canvas:active{cursor:grabbing}
+.hint{position:absolute;left:12px;bottom:10px;font-size:12px;color:#d8d4cc;background:rgba(10,12,15,.6);padding:4px 9px;border-radius:6px;pointer-events:none}
+.spec{position:absolute;right:12px;top:10px;font:500 12px/1.4 var(--mono);color:#d8d4cc;background:rgba(10,12,15,.6);padding:4px 9px;border-radius:6px;pointer-events:none;max-width:calc(100% - 24px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.transport{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px}
+.transport .seek{flex:1 1 220px;min-width:0}
+.time{font:500 14px/1 var(--mono);color:var(--muted);font-variant-numeric:tabular-nums;min-width:12ch;text-align:right}
+input[type=range]{accent-color:var(--key);width:100%;min-width:0}
+
+/* Desk */
+.desk{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:22px}
+.desk .wide{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:4px 32px;align-items:start}
+@media (max-width:720px){.desk{grid-template-columns:minmax(0,1fr)}.desk .wide{grid-template-columns:minmax(0,1fr)}}
+fieldset{border:1px solid var(--line);border-radius:12px;padding:12px 16px 16px;margin:0;background:var(--panel);min-width:0}
+legend{font:700 11.5px/1 var(--body);text-transform:uppercase;letter-spacing:.12em;color:var(--muted);padding:0 6px}
+.row{display:grid;grid-template-columns:100px minmax(0,1fr) 46px;align-items:center;gap:10px;margin-top:10px}
+.row label{font-size:13.5px;color:#c9c5bd}
+.row output{font:500 12.5px/1 var(--mono);color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
+.row.two{grid-template-columns:100px minmax(0,1fr)}
+select{background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:7px 9px;width:100%;min-width:0}
+.switch{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:6px}
+.switch strong{font-weight:600}
+.toggle{appearance:none;-webkit-appearance:none;width:44px;height:26px;border-radius:99px;background:#39404b;position:relative;cursor:pointer;flex:none;transition:background .15s;margin:0}
+.toggle::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#f2efe9;transition:transform .15s}
+.toggle:checked{background:var(--key)}
+.toggle:checked::after{transform:translateX(18px)}
+.keyrow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:12px}
+.swatch{position:relative;width:36px;height:32px;border-radius:8px;border:1px solid var(--line);overflow:hidden;flex:none}
+.swatch input{position:absolute;inset:-6px;width:calc(100% + 12px);height:calc(100% + 12px);border:0;padding:0;cursor:pointer;background:none}
+.hidden-when-off{transition:opacity .15s}
+.muted{color:var(--muted)}
+.fine{font-size:12.5px;color:var(--muted);margin:10px 0 0}
+
+/* Bins */
+.bins{display:flex;flex-direction:column;gap:22px;min-width:0}
+.bin-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+h2{font-family:var(--display);font-weight:700;font-size:20px;letter-spacing:-.01em;margin:0}
+.vlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.vitem{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:9px 8px 9px 12px;cursor:pointer}
+.vitem:hover{border-color:#3a414d}
+.vitem.on{border-color:var(--key);background:var(--key-tint)}
+.vname{font:500 13px/1.35 var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vmeta{display:flex;flex-wrap:wrap;gap:4px 6px;margin-top:4px}
+.chip{font:600 11px/1 var(--body);letter-spacing:.02em;padding:4px 7px;border-radius:99px;background:var(--panel-2);border:1px solid var(--line);color:#c9c5bd;white-space:nowrap}
+.chip.key{background:var(--key-tint);border-color:rgba(57,196,124,.4);color:var(--key-hi)}
+.chip.warn{border-color:rgba(227,165,76,.45);color:var(--warn)}
+.x{background:none;border:0;color:var(--muted);font-size:18px;line-height:1;padding:4px 7px;border-radius:6px;cursor:pointer}
+.x:hover{color:var(--fg);background:var(--panel-2)}
+.empty{border:1px dashed var(--line);border-radius:10px;padding:14px;color:var(--muted);font-size:13.5px}
+.bggrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.bgtile{position:relative;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel);cursor:pointer;padding:0;text-align:left}
+.bgtile:hover{border-color:#3a414d}
+.bgtile.on{border-color:var(--key);box-shadow:0 0 0 1px var(--key)}
+.bgtile .thumb{display:block;width:100%;aspect-ratio:2/1;object-fit:cover;background:repeating-conic-gradient(var(--check-a) 0 25%,var(--check-b) 0 50%) 0 0/14px 14px}
+.bgtile .cap{display:block;padding:6px 8px;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bgtile .x{position:absolute;top:4px;right:4px;background:rgba(10,12,15,.7);font-size:15px}
+
+/* How-to */
+.how{margin-top:40px;border-top:1px solid var(--line);padding-top:24px;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:28px}
+.how h3{font-family:var(--display);font-weight:700;font-size:18px;margin:0 0 10px}
+.how ol{margin:0;padding-left:20px;color:#cfcbc3;max-width:62ch}
+.how li{margin:6px 0}
+.keys{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 14px;font-size:14px;color:#cfcbc3}
+.keys kbd{font:600 12px/1 var(--mono);background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:5px 8px;color:var(--fg);white-space:nowrap;justify-self:start}
+
+.toast{position:fixed;left:50%;bottom:max(20px,env(safe-area-inset-bottom,0px));transform:translateX(-50%) translateY(20px);background:#23303a;border:1px solid #33424e;color:var(--fg);padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;max-width:calc(100% - 32px);z-index:10}
+.toast.show{opacity:1;transform:translateX(-50%)}
+#vbin{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none;overflow:hidden}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="mark" aria-hidden="true"></div>
+      <div>
+        <h1>Greenroom</h1>
+        <p class="tag">VR video player for Quest. Green-screen and passthrough videos get your own pictures behind them.</p>
+      </div>
+    </div>
+    <div class="enter">
+      <button id="enterVR" class="btn primary xl" type="button">Enter VR</button>
+      <span id="xrNote" class="note"></span>
+    </div>
+  </header>
+
+  <div class="grid">
+    <section aria-label="Preview">
+      <div class="screen" id="screen">
+        <canvas id="view"></canvas>
+        <div class="spec" id="spec">—</div>
+        <div class="hint">Drag to look around · scroll to zoom</div>
+      </div>
+      <div class="transport">
+        <button id="playBtn" class="btn primary" type="button" style="min-width:84px">Play</button>
+        <button id="back30" class="btn" type="button">−30 s</button>
+        <button id="fwd30" class="btn" type="button">+30 s</button>
+        <input id="seek" class="seek" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek">
+        <span id="time" class="time">0:00 / 0:00</span>
+      </div>
+
+      <div class="desk">
+        <fieldset class="wide">
+          <legend>Background replacement</legend>
+          <div>
+          <div class="switch">
+            <div><strong>Replace screen color</strong><div class="fine" style="margin:2px 0 0">For green-screen and passthrough videos</div></div>
+            <input id="keyOn" class="toggle" type="checkbox" aria-label="Replace screen color">
+          </div>
+          <div class="keyrow">
+            <label class="swatch" title="Screen color"><input id="keyColor" type="color" value="#00b140" aria-label="Screen color"></label>
+            <button id="autoKey" class="btn small" type="button">Auto-detect</button>
+            <button id="keyGreen" class="btn small ghost" type="button">Green</button>
+            <button id="keyBlue" class="btn small ghost" type="button">Blue</button>
+          </div>
+          </div>
+          <div>
+          <div class="row"><label for="tol">Tolerance</label><input id="tol" type="range" min="0.02" max="0.45" step="0.005"><output id="tolV"></output></div>
+          <div class="row"><label for="soft">Softness</label><input id="soft" type="range" min="0.01" max="0.3" step="0.005"><output id="softV"></output></div>
+          <div class="row"><label for="spill">Spill removal</label><input id="spill" type="range" min="0.01" max="0.6" step="0.005"><output id="spillV"></output></div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Backdrop</legend>
+          <div class="row two"><label for="bgMode">Placement</label>
+            <select id="bgMode"><option value="auto">Auto</option><option value="pano">Panorama 360°</option><option value="wall">Wall</option><option value="dome">Dome 180°</option></select></div>
+          <div class="row"><label for="bgYaw">Rotate</label><input id="bgYaw" type="range" min="-180" max="180" step="1"><output id="bgYawV"></output></div>
+          <div class="row"><label for="bgHeight">Height</label><input id="bgHeight" type="range" min="-40" max="40" step="1"><output id="bgHeightV"></output></div>
+          <div class="row"><label for="bgDim">Brightness</label><input id="bgDim" type="range" min="0.15" max="1.3" step="0.01"><output id="bgDimV"></output></div>
+          <div class="row" id="bgSizeRow"><label for="bgSize">Wall size</label><input id="bgSize" type="range" min="50" max="150" step="1"><output id="bgSizeV"></output></div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Video format</legend>
+          <div class="row two"><label for="proj">Projection</label>
+            <select id="proj"><option value="180">180°</option><option value="360">360°</option><option value="fish190">Fisheye 190°</option><option value="fish200">Fisheye 200°</option><option value="fish220">Fisheye 220°</option><option value="flat">Flat screen</option></select></div>
+          <div class="row two"><label for="stereo">Layout</label>
+            <select id="stereo"><option value="sbs">Side by side</option><option value="tb">Top / bottom</option><option value="mono">2D</option></select></div>
+          <div class="row" id="flatRow"><label for="flatFov">Screen size</label><input id="flatFov" type="range" min="40" max="130" step="1"><output id="flatFovV"></output></div>
+          <div class="switch" style="margin-top:12px"><span>Swap eyes</span><input id="swap" class="toggle" type="checkbox" aria-label="Swap eyes"></div>
+          <p class="fine">Picked from the file name (_180, _LR, _TB, FISHEYE190, MKX200…) and the video's shape. Settings are remembered per file.</p>
+        </fieldset>
+      </div>
+    </section>
+
+    <aside class="bins">
+      <section>
+        <div class="bin-head"><h2>Videos</h2><label class="btn primary small" for="videoInput" tabindex="0">Add videos</label></div>
+        <input id="videoInput" type="file" accept="video/*,.mkv,.mp4,.webm,.mov" multiple hidden>
+        <ul class="vlist" id="videoList"></ul>
+        <p class="fine">Videos play straight from the headset's storage. Nothing is uploaded.</p>
+      </section>
+      <section>
+        <div class="bin-head"><h2>Backdrops</h2><label class="btn small" for="imageInput" tabindex="0">Add pictures</label></div>
+        <input id="imageInput" type="file" accept="image/*" multiple hidden>
+        <div class="bggrid" id="bgGrid"></div>
+        <p class="fine">Pictures you add are kept in this browser, so they're here next time. Wide 2:1 panoramas wrap all the way around; other photos hang as a wall.</p>
+      </section>
+    </aside>
+  </div>
+
+  <section class="how" aria-label="How to use">
+    <div>
+      <h3>On your Quest 2</h3>
+      <ol>
+        <li>Connect the headset to your PC with a USB-C cable, choose Allow in the headset, and copy videos into <b>Movies</b> and pictures into <b>Pictures</b>.</li>
+        <li>Open this page in the Quest Browser.</li>
+        <li>Tap <b>Add videos</b> and <b>Add pictures</b> and pick files from the headset.</li>
+        <li>Press <b>Enter VR</b>. The menu opens in front of you.</li>
+      </ol>
+    </div>
+    <div>
+      <h3>Controllers in VR</h3>
+      <div class="keys">
+        <kbd>Trigger</kbd><span>Use the menu, or open it when it's hidden</span>
+        <kbd>A / X</kbd><span>Play or pause</span>
+        <kbd>B / Y</kbd><span>Show or hide the menu</span>
+        <kbd>Stick ← →</kbd><span>Skip back or forward 10 seconds</span>
+        <kbd>Recenter</kbd><span>Menu button. Turns the video to face you</span>
+      </div>
+    </div>
+  </section>
+</div>
+<div id="vbin" aria-hidden="true"></div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+
+/* ---------- helpers ---------- */
+const $ = (id) => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const fmtTime = (s) => { if (!isFinite(s) || s < 0) s = 0; s = Math.floor(s); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0'); };
+const toHex = (rgb) => '#' + rgb.map(c => Math.round(clamp(c, 0, 1) * 255).toString(16).padStart(2, '0')).join('');
+const fromHex = (h) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
+const cbcr = (c) => [c[0] * -0.100644 + c[1] * -0.338572 + c[2] * 0.439216 + 0.501961, c[0] * 0.439216 + c[1] * -0.398942 + c[2] * -0.040274 + 0.501961];
+let toastTimer = 0;
+function toast(msg, ms = 3200) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), ms); }
+
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('greenroom:' + k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('greenroom:' + k, JSON.stringify(v)); } catch (e) { } },
+};
+const idb = (() => {
+  let dbp = null;
+  const open = () => dbp || (dbp = new Promise((res, rej) => {
+    try { const r = indexedDB.open('greenroom', 1); r.onupgradeneeded = () => r.result.createObjectStore('bgs', { keyPath: 'id' }); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); } catch (e) { rej(e); }
+  }));
+  const run = async (mode, fn) => { const db = await open(); return new Promise((res, rej) => { const t = db.transaction('bgs', mode); const req = fn(t.objectStore('bgs')); t.oncomplete = () => res(req && req.result); t.onerror = () => rej(t.error); }); };
+  return {
+    all: async () => { try { return (await run('readonly', s => s.getAll())) || []; } catch (e) { return []; } },
+    put: async (rec) => { try { await run('readwrite', s => s.put(rec)); } catch (e) { } },
+    del: async (id) => { try { await run('readwrite', s => s.delete(id)); } catch (e) { } },
+  };
+})();
+
+/* ---------- state ---------- */
+const PROJ = { '180': '180°', '360': '360°', fish190: 'Fisheye 190°', fish200: 'Fisheye 200°', fish220: 'Fisheye 220°', flat: 'Flat screen' };
+const PROJ_FOV = { fish190: 190, fish200: 200, fish220: 220 };
+const PROJ_ORDER = ['180', '360', 'fish190', 'fish200', 'fish220', 'flat'];
+const STEREO = { sbs: 'Side by side', tb: 'Top / bottom', mono: '2D' };
+const STEREO_SHORT = { sbs: 'SBS', tb: 'TB', mono: '2D' };
+const STEREO_ORDER = ['sbs', 'tb', 'mono'];
+const BGMODE = { auto: 'Auto', pano: 'Panorama', wall: 'Wall', dome: 'Dome' };
+const BGMODE_ORDER = ['auto', 'pano', 'wall', 'dome'];
+const KEY_PRESETS = { green: [0, 177 / 255, 64 / 255], blue: [0, 71 / 255, 187 / 255] };
+const VIDEO_KEYS = ['proj', 'stereo', 'swap', 'flatFov', 'keyOn', 'keyColor', 'tol', 'soft', 'spill'];
+const BG_KEYS = ['bgId', 'bgMode', 'bgYaw', 'bgHeight', 'bgDim', 'bgSize'];
+const DEFAULT_VIDEO = { proj: '180', stereo: 'sbs', swap: false, flatFov: 80, keyOn: false, keyColor: KEY_PRESETS.green.slice(), tol: 0.15, soft: 0.08, spill: 0.12 };
+const DEFAULT_BG = { bgId: 'dusk', bgMode: 'auto', bgYaw: 0, bgHeight: 0, bgDim: 0.9, bgSize: 100 };
+const S = { ...DEFAULT_VIDEO, ...DEFAULT_BG, ...store.get('bg', {}) };
+
+/* ---------- renderer & scene ---------- */
+const canvas = $('view');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.xr.enabled = true;
+renderer.xr.setReferenceSpaceType('local');
+renderer.xr.setFramebufferScaleFactor(1.0);
+const maxAniso = renderer.capabilities.getMaxAnisotropy();
+const maxTex = Math.min(8192, renderer.capabilities.maxTextureSize);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, 16 / 9, 0.05, 100);
+camera.layers.enable(1);
+scene.add(camera);
+
+const VS = `
+varying vec3 vDir;
+void main(){
+  vDir = position;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}`;
+const FS = `
+precision highp float;
+uniform sampler2D uMap; uniform bool uHasMap;
+uniform vec4 uEye; uniform int uProj; uniform float uFov; uniform float uAspect;
+uniform bool uKeyOn; uniform vec2 uKeyCC; uniform float uTol; uniform float uSoft; uniform float uSpill;
+uniform sampler2D uBg; uniform bool uHasBg; uniform int uBgMode;
+uniform float uBgYaw; uniform float uBgPitch; uniform float uBgDim; uniform float uBgFov; uniform float uBgAspect;
+uniform vec3 uBgFill;
+varying vec3 vDir;
+const float PI = 3.14159265358979;
+
+vec2 cbcr(vec3 c){
+  return vec2(dot(c, vec3(-0.100644, -0.338572, 0.439216)) + 0.501961,
+              dot(c, vec3(0.439216, -0.398942, -0.040274)) + 0.501961);
+}
+
+bool projUV(vec3 d, out vec2 uv){
+  if(uProj == 0){
+    float lon = atan(d.x, -d.z); float lat = asin(clamp(d.y, -1.0, 1.0));
+    uv = vec2(0.5 + lon / PI, 0.5 + lat / PI);
+    return abs(lon) <= PI * 0.5;
+  } else if(uProj == 1){
+    float lon = atan(d.x, -d.z); float lat = asin(clamp(d.y, -1.0, 1.0));
+    uv = vec2(0.5 + lon / (2.0 * PI), 0.5 + lat / PI);
+    return true;
+  } else if(uProj == 2){
+    float theta = acos(clamp(-d.z, -1.0, 1.0));
+    float r = theta / uFov;
+    float len = length(d.xy);
+    vec2 dir2 = len > 1e-6 ? d.xy / len : vec2(0.0);
+    uv = vec2(0.5) + dir2 * r;
+    return r <= 0.5;
+  } else {
+    float z = max(-d.z, 1e-4);
+    vec2 p = d.xy / z;
+    float hw = tan(uFov * 0.5);
+    uv = vec2(0.5 + p.x / (2.0 * hw), 0.5 + p.y * uAspect / (2.0 * hw));
+    return d.z < -0.01 && uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0;
+  }
+}
+
+vec3 sampleBg(vec3 d){
+  if(!uHasBg) return uBgFill;
+  float cy = cos(uBgYaw), sy = sin(uBgYaw);
+  d = vec3(cy * d.x - sy * d.z, d.y, sy * d.x + cy * d.z);
+  float cp = cos(uBgPitch), sp = sin(uBgPitch);
+  d = vec3(d.x, cp * d.y + sp * d.z, -sp * d.y + cp * d.z);
+  vec2 uv; vec2 uvAlt; float inside = 1.0;
+  if(uBgMode == 1){
+    float z = max(-d.z, 1e-3);
+    vec2 p = d.xy / z;
+    float hw = tan(uBgFov * 0.5);
+    uv = vec2(0.5 + p.x / (2.0 * hw), 0.5 + p.y * uBgAspect / (2.0 * hw));
+    inside = step(0.0, -d.z) * step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
+    uvAlt = uv;
+  } else {
+    float lon = atan(d.x, -d.z); float lat = asin(clamp(d.y, -1.0, 1.0));
+    if(uBgMode == 2){
+      uv = vec2(0.5 + lon / PI, 0.5 + lat / PI);
+      inside = step(abs(lon), PI * 0.5);
+      uvAlt = uv;
+    } else {
+      uv = vec2(0.5 + lon / (2.0 * PI), 0.5 + lat / PI);
+      uvAlt = vec2(fract(uv.x + 0.5), uv.y);
+    }
+  }
+  vec2 dx = dFdx(uv), dy = dFdy(uv);
+  vec2 dx2 = dFdx(uvAlt), dy2 = dFdy(uvAlt);
+  if(dot(dx2, dx2) + dot(dy2, dy2) < dot(dx, dx) + dot(dy, dy)){ dx = dx2; dy = dy2; }
+  vec3 c = textureGrad(uBg, clamp(uv, 0.0, 1.0), dx, dy).rgb * uBgDim;
+  return mix(uBgFill, c, inside);
+}
+
+void main(){
+  vec3 d = normalize(vDir);
+  vec3 bg = sampleBg(d);
+  vec2 uv;
+  bool inside = projUV(d, uv);
+  vec3 col = bg;
+  if(uHasMap && inside){
+    vec3 v = texture2D(uMap, uEye.xy + uv * uEye.zw).rgb;
+    float a = 1.0;
+    if(uKeyOn){
+      float base = distance(cbcr(v), uKeyCC) - uTol;
+      a = pow(clamp(base / uSoft, 0.0, 1.0), 1.5);
+      float sp = pow(clamp(base / uSpill, 0.0, 1.0), 1.5);
+      float desat = dot(v, vec3(0.2126, 0.7152, 0.0722));
+      v = mix(vec3(desat), v, sp);
+    }
+    col = mix(bg, v, a);
+  }
+  gl_FragColor = vec4(col, 1.0);
+}`;
+
+const shared = {
+  uMap: { value: null }, uHasMap: { value: false },
+  uProj: { value: 0 }, uFov: { value: Math.PI }, uAspect: { value: 1 },
+  uKeyOn: { value: false }, uKeyCC: { value: new THREE.Vector2() }, uTol: { value: 0.15 }, uSoft: { value: 0.08 }, uSpill: { value: 0.12 },
+  uBg: { value: null }, uHasBg: { value: false }, uBgMode: { value: 0 },
+  uBgYaw: { value: 0 }, uBgPitch: { value: 0 }, uBgDim: { value: 1 }, uBgFov: { value: 1.7 }, uBgAspect: { value: 1.5 },
+  uBgFill: { value: new THREE.Vector3(0.043, 0.051, 0.063) },
+};
+const makeEyeMat = () => new THREE.ShaderMaterial({
+  uniforms: { ...shared, uEye: { value: new THREE.Vector4(0, 0, 1, 1) } },
+  vertexShader: VS, fragmentShader: FS, side: THREE.BackSide, depthWrite: false, depthTest: false,
+});
+const content = new THREE.Group();
+scene.add(content);
+const sphereGeo = new THREE.SphereGeometry(20, 64, 32);
+const matL = makeEyeMat(), matR = makeEyeMat();
+const meshL = new THREE.Mesh(sphereGeo, matL), meshR = new THREE.Mesh(sphereGeo, matR);
+meshL.layers.set(1); meshR.layers.set(2);
+for (const m of [meshL, meshR]) { m.frustumCulled = false; m.renderOrder = -10; content.add(m); }
+
+/* ---------- video sources ---------- */
+function setupVideoTex(tex) {
+  tex.colorSpace = THREE.NoColorSpace; tex.generateMipmaps = false;
+  tex.minFilter = THREE.LinearFilter; tex.magFilter = THREE.LinearFilter;
+}
+class VideoSource {
+  constructor(file) {
+    this.kind = 'video';
+    const el = this.el = document.createElement('video');
+    el.playsInline = true; el.preload = 'auto'; el.setAttribute('playsinline', '');
+    this.url = URL.createObjectURL(file); el.src = this.url;
+    $('vbin').appendChild(el);
+    this.tex = new THREE.VideoTexture(el); setupVideoTex(this.tex);
+    this.ready = false; this.lastRvfc = 0; this.lastT = -1;
+    if ('requestVideoFrameCallback' in el) {
+      const cb = () => { this.lastRvfc = performance.now(); if (this.el) el.requestVideoFrameCallback(cb); };
+      el.requestVideoFrameCallback(cb);
+    }
+    this.loaded = new Promise((res, rej) => {
+      el.addEventListener('loadeddata', () => { this.ready = true; res(); }, { once: true });
+      el.addEventListener('error', () => rej(el.error), { once: true });
+    });
+    el.addEventListener('play', () => { panelDirty = true; syncPlayButton(); });
+    el.addEventListener('pause', () => { panelDirty = true; syncPlayButton(); });
+    el.addEventListener('seeked', () => { this.tex.needsUpdate = true; });
+  }
+  get width() { return this.el.videoWidth || 2; }
+  get height() { return this.el.videoHeight || 1; }
+  get time() { return this.el.currentTime; }
+  get duration() { return this.el.duration; }
+  get paused() { return this.el.paused; }
+  get frameSource() { return this.el; }
+  play() { return this.el.play(); }
+  pause() { this.el.pause(); }
+  seek(t) { const d = this.duration; if (isFinite(d)) this.el.currentTime = clamp(t, 0, Math.max(0, d - 0.25)); }
+  update(dt, now) {
+    // Inside an immersive session some browsers stop firing video-frame callbacks; upload frames ourselves then.
+    const el = this.el;
+    if (el.readyState < 2 || now - this.lastRvfc < 150) return;
+    if (el.currentTime !== this.lastT) { this.lastT = el.currentTime; this.tex.needsUpdate = true; }
+  }
+  dispose() { const el = this.el; el.pause(); el.removeAttribute('src'); el.load(); el.remove(); URL.revokeObjectURL(this.url); this.tex.dispose(); this.el = null; }
+}
+
+class DemoSource {
+  constructor() {
+    this.kind = 'demo'; this.ready = true; this.loaded = Promise.resolve();
+    this.canvas = document.createElement('canvas'); this.canvas.width = 2048; this.canvas.height = 1024;
+    this.ctx = this.canvas.getContext('2d');
+    this.tex = new THREE.CanvasTexture(this.canvas); setupVideoTex(this.tex);
+    this.t = 0; this._paused = false; this.lastDraw = 0; this.draw();
+  }
+  get width() { return 2048; } get height() { return 1024; }
+  get time() { return this.t; } get duration() { return 40; }
+  get paused() { return this._paused; }
+  get frameSource() { return this.canvas; }
+  play() { this._paused = false; panelDirty = true; syncPlayButton(); return Promise.resolve(); }
+  pause() { this._paused = true; panelDirty = true; syncPlayButton(); }
+  seek(t) { this.t = ((t % 40) + 40) % 40; this.draw(); }
+  update(dt, now) { if (this._paused) return; this.t = (this.t + dt) % 40; if (now - this.lastDraw > 33) { this.draw(); this.lastDraw = now; } }
+  draw() {
+    const g = this.ctx, t = this.t;
+    for (const eye of [0, 1]) {
+      const ox = eye * 1024;
+      g.save(); g.beginPath(); g.rect(ox, 0, 1024, 1024); g.clip();
+      const bg = g.createRadialGradient(ox + 512, 430, 30, ox + 512, 520, 780);
+      bg.addColorStop(0, 'rgb(62,194,104)'); bg.addColorStop(1, 'rgb(22,124,60)');
+      g.fillStyle = bg; g.fillRect(ox, 0, 1024, 1024);
+      const cx = ox + 512 + (eye ? -16 : 0) + Math.sin(t * 0.6) * 60;
+      const bob = Math.sin(t * 2.2) * 12;
+      g.fillStyle = 'rgba(8,62,28,0.5)';
+      g.beginPath(); g.ellipse(cx, 812, 118 - bob * 0.8, 22, 0, 0, Math.PI * 2); g.fill();
+      g.save(); g.translate(cx, 590 + bob); g.rotate(Math.sin(t * 1.1) * 0.07); g.scale(0.82, 0.82);
+      // arms (waving)
+      g.lineCap = 'round'; g.lineWidth = 34; g.strokeStyle = '#e8734f';
+      const wave = Math.sin(t * 5) * 0.5;
+      g.beginPath(); g.moveTo(-100, 10); g.lineTo(-175, -60 + wave * 60); g.stroke();
+      g.beginPath(); g.moveTo(100, 10); g.lineTo(170, 70); g.stroke();
+      // feet
+      g.fillStyle = '#c95a3c';
+      g.beginPath(); g.ellipse(-58, 168, 46, 26, 0, 0, Math.PI * 2); g.ellipse(58, 168, 46, 26, 0, 0, Math.PI * 2); g.fill();
+      // body with green spill rim
+      const body = new Path2D(); body.roundRect(-118, -160, 236, 330, 118);
+      g.lineWidth = 12; g.strokeStyle = 'rgba(80,205,118,0.55)'; g.stroke(body);
+      const grad = g.createLinearGradient(-118, -160, 118, 170); grad.addColorStop(0, '#ff9a6c'); grad.addColorStop(1, '#d9573c');
+      g.fillStyle = grad; g.fill(body);
+      g.fillStyle = 'rgba(255,226,200,0.9)';
+      g.beginPath(); g.ellipse(0, 60, 72, 86, 0, 0, Math.PI * 2); g.fill();
+      // antenna
+      g.lineWidth = 6; g.strokeStyle = '#3b2a2a'; g.beginPath(); g.moveTo(0, -158); g.quadraticCurveTo(10, -210, 30, -240); g.stroke();
+      g.fillStyle = '#ffd35c'; g.beginPath(); g.arc(30, -244, 17, 0, Math.PI * 2); g.fill();
+      // eyes
+      const blink = (t % 4) < 0.12 ? 0.12 : 1;
+      for (const sx of [-46, 46]) {
+        g.fillStyle = '#fff'; g.beginPath(); g.ellipse(sx, -62, 30, 30 * blink, 0, 0, Math.PI * 2); g.fill();
+        if (blink > 0.5) { g.fillStyle = '#1d1b22'; g.beginPath(); g.arc(sx + 6, -58, 13, 0, Math.PI * 2); g.fill(); }
+      }
+      g.restore(); g.restore();
+    }
+    this.tex.needsUpdate = true;
+  }
+  dispose() { }
+}
+const demo = new DemoSource();
+
+/* ---------- backdrops ---------- */
+function averageColor(src) {
+  const c = document.createElement('canvas'); c.width = 16; c.height = 8;
+  const g = c.getContext('2d'); g.drawImage(src, 0, 0, 16, 8);
+  const d = g.getImageData(0, 0, 16, 8).data; let r = 0, gg = 0, b = 0;
+  for (let i = 0; i < d.length; i += 4) { r += d[i]; gg += d[i + 1]; b += d[i + 2]; }
+  const n = d.length / 4; return [r / n / 255, gg / n / 255, b / n / 255];
+}
+function thumbOf(src) {
+  const c = document.createElement('canvas'); c.width = 320; c.height = 160;
+  const g = c.getContext('2d'); const sw = src.naturalWidth || src.width, sh = src.naturalHeight || src.height;
+  const s = Math.max(320 / sw, 160 / sh); g.drawImage(src, (320 - sw * s) / 2, (160 - sh * s) / 2, sw * s, sh * s);
+  return c.toDataURL('image/jpeg', 0.8);
+}
+function bgTexture(src) {
+  const tex = new THREE.Texture(src); tex.needsUpdate = true;
+  tex.colorSpace = THREE.NoColorSpace; tex.generateMipmaps = true;
+  tex.minFilter = THREE.LinearMipmapLinearFilter; tex.magFilter = THREE.LinearFilter;
+  tex.anisotropy = Math.min(4, maxAniso);
+  return tex;
+}
+function seeded(seed) { let s = seed >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
+function makeDusk() {
+  const W = 4096, H = 2048, c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
+  const sky = g.createLinearGradient(0, 0, 0, H / 2);
+  sky.addColorStop(0, '#10152b'); sky.addColorStop(0.45, '#35305e'); sky.addColorStop(0.8, '#b25f78'); sky.addColorStop(1, '#f3a866');
+  g.fillStyle = sky; g.fillRect(0, 0, W, H / 2 + 4);
+  const rnd = seeded(7);
+  for (let i = 0; i < 900; i++) { const y = Math.pow(rnd(), 1.6) * H * 0.36; g.fillStyle = `rgba(255,255,255,${(0.25 + rnd() * 0.6) * (1 - y / (H * 0.36))})`; g.fillRect(rnd() * W, y, 2, 2); }
+  const sun = g.createRadialGradient(W / 2, H / 2 - 50, 0, W / 2, H / 2 - 50, 760);
+  sun.addColorStop(0, 'rgba(255,220,160,0.95)'); sun.addColorStop(0.07, 'rgba(255,190,125,0.55)'); sun.addColorStop(1, 'rgba(255,150,110,0)');
+  g.fillStyle = sun; g.fillRect(0, 0, W, H / 2 + 60);
+  const ground = g.createLinearGradient(0, H / 2, 0, H); ground.addColorStop(0, '#2a2238'); ground.addColorStop(1, '#060609');
+  g.fillStyle = ground; g.fillRect(0, H / 2, W, H / 2);
+  const layers = [{ base: H / 2 + 4, amp: 190, col: '#5a4970', ph: 0.4 }, { base: H / 2 + 40, amp: 130, col: '#382f4f', ph: 2.1 }, { base: H / 2 + 90, amp: 90, col: '#1b1828', ph: 4.2 }];
+  for (const L of layers) {
+    g.beginPath(); g.moveTo(0, H);
+    for (let x = 0; x <= W; x += 8) {
+      const a = x / W * Math.PI * 2;
+      const n = 0.5 + 0.3 * Math.sin(3 * a + L.ph) + 0.14 * Math.sin(7 * a + L.ph * 1.7) + 0.06 * Math.sin(19 * a + L.ph * 0.6);
+      g.lineTo(x, L.base - L.amp * n);
+    }
+    g.lineTo(W, H); g.closePath(); g.fillStyle = L.col; g.fill();
+  }
+  return c;
+}
+function makeStudio() {
+  const W = 4096, H = 2048, c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
+  const hz = H * 0.58;
+  const wall = g.createLinearGradient(0, 0, 0, hz); wall.addColorStop(0, '#2b2f36'); wall.addColorStop(1, '#767c86');
+  g.fillStyle = wall; g.fillRect(0, 0, W, hz);
+  const floor = g.createLinearGradient(0, hz, 0, H); floor.addColorStop(0, '#80868f'); floor.addColorStop(0.35, '#51565e'); floor.addColorStop(1, '#1d2025');
+  g.fillStyle = floor; g.fillRect(0, hz, W, H - hz);
+  const band = g.createLinearGradient(0, hz - 70, 0, hz + 70); band.addColorStop(0, 'rgba(118,124,134,0)'); band.addColorStop(0.5, 'rgba(128,134,143,0.9)'); band.addColorStop(1, 'rgba(128,134,143,0)');
+  g.fillStyle = band; g.fillRect(0, hz - 70, W, 140);
+  const spot = g.createRadialGradient(W / 2, H * 0.47, 0, W / 2, H * 0.47, 980);
+  spot.addColorStop(0, 'rgba(255,244,228,0.38)'); spot.addColorStop(1, 'rgba(255,244,228,0)');
+  g.fillStyle = spot; g.fillRect(0, 0, W, H);
+  return c;
+}
+
+const bgs = [];
+const bgById = (id) => bgs.find(b => b.id === id);
+function addBuiltinBg(id, name, make) {
+  const c = make();
+  bgs.push({ id, name, kind: 'builtin', tex: bgTexture(c), aspect: c.width / c.height, avg: averageColor(c), thumb: thumbOf(c) });
+}
+async function bgFromBlob(blob, name, id, kind) {
+  const url = URL.createObjectURL(blob);
+  const img = new Image(); img.decoding = 'async'; img.src = url;
+  await img.decode();
+  let w = img.naturalWidth, h = img.naturalHeight, src = img;
+  if (w > maxTex || h > maxTex) {
+    const s = maxTex / Math.max(w, h); const c = document.createElement('canvas');
+    c.width = Math.round(w * s); c.height = Math.round(h * s); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); src = c;
+  }
+  return { id, name, kind, tex: bgTexture(src), aspect: w / h, avg: averageColor(img), thumb: thumbOf(img), url };
+}
+bgs.push({ id: 'none', name: 'None', kind: 'builtin', tex: null, aspect: 2, avg: [0.043, 0.051, 0.063], thumb: null });
+addBuiltinBg('dusk', 'Dusk ridge', makeDusk);
+addBuiltinBg('studio', 'Grey studio', makeStudio);
+
+/* ---------- library ---------- */
+const videos = [{ id: 'demo', demo: true, name: 'Demo clip (green screen)', key: 'demo', size: 0, detected: { keyOn: true, keyColor: [0.2, 0.68, 0.34], tol: 0.12, soft: 0.07, spill: 0.14 }, hints: { proj: true, stereo: true }, source: demo }];
+let current = null;
+
+function detectFromName(name) {
+  const n = name.toLowerCase(); const r = {}; const hints = { proj: false, stereo: false };
+  const w = (s) => new RegExp('(^|[^a-z0-9])(' + s + ')([^a-z0-9]|$)').test(n);
+  if (w('tb|ou|3dv|overunder|over_under|topbottom|top_bottom')) { r.stereo = 'tb'; hints.stereo = true; }
+  else if (w('lr|sbs|3dh|rl|hsbs|half_sbs')) { r.stereo = 'sbs'; hints.stereo = true; }
+  else if (w('2d|mono')) { r.stereo = 'mono'; hints.stereo = true; }
+  if (/vrca220|fisheye_?220|mkx220|f220/.test(n)) r.proj = 'fish220';
+  else if (/mkx200|fisheye_?200|f200/.test(n)) r.proj = 'fish200';
+  else if (/fisheye|rf52|f190/.test(n)) r.proj = 'fish190';
+  else if (/(^|[^0-9])360([^0-9p]|$)/.test(n)) r.proj = '360';
+  else if (/(^|[^0-9])180([^0-9p]|$)/.test(n)) r.proj = '180';
+  if (r.proj) hints.proj = true;
+  if (/passthrough|pass_through|greenscreen|green_screen|chroma/.test(n) || w('pt')) r.keyOn = true;
+  const alpha = w('alpha');
+  return { r, hints, alpha };
+}
+function guessFromShape(w, h, hints, proj) {
+  const a = w / h, g = {};
+  if (a > 3.2) { if (!hints.stereo) g.stereo = 'sbs'; if (!hints.proj) g.proj = 'flat'; }
+  else if (a > 1.9) { if (!hints.stereo) g.stereo = (proj === '360' && hints.proj) ? 'mono' : 'sbs'; if (!hints.proj) g.proj = '180'; }
+  else if (a > 1.5) { if (!hints.stereo) g.stereo = 'mono'; if (!hints.proj) g.proj = 'flat'; }
+  else if (a > 0.85) { if (!hints.stereo) g.stereo = 'tb'; if (!hints.proj) g.proj = '360'; }
+  else { if (!hints.stereo) g.stereo = 'tb'; if (!hints.proj) g.proj = '180'; }
+  return g;
+}
+
+function addFiles(files) {
+  let first = -1;
+  for (const f of files) {
+    const key = f.name + '|' + f.size;
+    if (videos.some(v => v.key === key)) continue;
+    const { r, hints, alpha } = detectFromName(f.name);
+    videos.push({ id: 'v' + Math.random().toString(36).slice(2, 9), name: f.name, size: f.size, key, file: f, detected: r, hints, alpha, source: null, saved: store.get('v:' + key, null) });
+    if (first < 0) first = videos.length - 1;
+  }
+  renderVideoList();
+  if (first >= 0) selectVideo(first, false);
+}
+
+async function selectVideo(i, autoplay) {
+  const item = videos[i]; if (!item) return;
+  if (current && current !== item && current.source) {
+    current.source.pause();
+    if (current.source.kind === 'video') { current.source.dispose(); current.source = null; }
+  }
+  current = item;
+  if (!item.source) item.source = new VideoSource(item.file);
+  const saved = store.get('v:' + item.key, null);
+  Object.assign(S, DEFAULT_VIDEO, item.detected || {}, saved || {});
+  S.keyColor = (S.keyColor || DEFAULT_VIDEO.keyColor).slice();
+  apply(); syncControls(); renderVideoList(); panelDirty = true;
+  try { await item.source.loaded; }
+  catch (e) {
+    toast('This file can’t be played in this browser. MP4 with H.264 or H.265 works best.', 5000);
+    return;
+  }
+  if (current !== item) return;
+  if (!saved) {
+    Object.assign(S, guessFromShape(item.source.width, item.source.height, item.hints || {}, S.proj));
+    if (item.detected && item.detected.keyOn && !item.demo) autoKey(true);
+    saveVideoSettings();
+  }
+  if (item.alpha) toast('This file looks alpha-packed (_ALPHA). If it shows a mask beside the picture, use the green-screen version of the video instead.', 6000);
+  apply(); syncControls(); renderVideoList(); panelDirty = true;
+  if (autoplay) item.source.play().catch(() => { });
+}
+function stepVideo(dir) {
+  if (!current) return;
+  const i = videos.indexOf(current);
+  selectVideo((i + dir + videos.length) % videos.length, true);
+}
+function saveVideoSettings() {
+  if (!current || current.demo) return;
+  const o = {}; for (const k of VIDEO_KEYS) o[k] = S[k];
+  store.set('v:' + current.key, o);
+}
+function saveBgSettings() { const o = {}; for (const k of BG_KEYS) o[k] = S[k]; store.set('bg', o); }
+
+function setS(patch) {
+  Object.assign(S, patch);
+  if (VIDEO_KEYS.some(k => k in patch)) saveVideoSettings();
+  if (BG_KEYS.some(k => k in patch)) saveBgSettings();
+  apply(); syncControls(); panelDirty = true;
+  if ('proj' in patch || 'stereo' in patch || 'keyOn' in patch) renderVideoList();
+  if ('bgId' in patch) renderBgGrid();
+}
+
+/* ---------- apply state to the shader ---------- */
+function resolvedBgMode(bg) { return S.bgMode === 'auto' ? (bg && bg.aspect >= 1.9 ? 'pano' : 'wall') : S.bgMode; }
+function apply() {
+  const u = shared, src = current && current.source;
+  u.uHasMap.value = !!(src && src.ready);
+  u.uMap.value = src ? src.tex : null;
+  u.uProj.value = S.proj === '180' ? 0 : S.proj === '360' ? 1 : S.proj === 'flat' ? 3 : 2;
+  u.uFov.value = (S.proj === 'flat' ? S.flatFov : (PROJ_FOV[S.proj] || 180)) * Math.PI / 180;
+  let L = [0, 0, 1, 1], R = [0, 0, 1, 1];
+  if (S.stereo === 'sbs') { L = [0, 0, 0.5, 1]; R = [0.5, 0, 0.5, 1]; }
+  else if (S.stereo === 'tb') { L = [0, 0.5, 1, 0.5]; R = [0, 0, 1, 0.5]; }
+  if (S.swap) [L, R] = [R, L];
+  matL.uniforms.uEye.value.set(...L); matR.uniforms.uEye.value.set(...R);
+  const w = src ? src.width : 2, h = src ? src.height : 1;
+  u.uAspect.value = (w * L[2]) / (h * L[3]);
+  u.uKeyOn.value = !!S.keyOn;
+  u.uKeyCC.value.set(...cbcr(S.keyColor));
+  u.uTol.value = S.tol; u.uSoft.value = Math.max(0.005, S.soft); u.uSpill.value = Math.max(0.005, S.spill);
+  const bg = bgById(S.bgId) || bgById('none');
+  u.uHasBg.value = !!bg.tex; u.uBg.value = bg.tex;
+  const mode = resolvedBgMode(bg);
+  u.uBgMode.value = mode === 'pano' ? 0 : mode === 'wall' ? 1 : 2;
+  u.uBgAspect.value = bg.aspect;
+  const f = bg.tex ? 0.45 * S.bgDim : 1;
+  u.uBgFill.value.set(bg.avg[0] * f, bg.avg[1] * f, bg.avg[2] * f);
+  u.uBgYaw.value = S.bgYaw * Math.PI / 180; u.uBgPitch.value = S.bgHeight * Math.PI / 180;
+  u.uBgDim.value = S.bgDim; u.uBgFov.value = S.bgSize * Math.PI / 180;
+  updateSpec();
+}
+
+/* ---------- auto key ---------- */
+function autoKey(silent) {
+  const src = current && current.source;
+  if (!src || !src.ready) { if (!silent) toast('Load a video first.'); return; }
+  const w = src.width, h = src.height;
+  let sw = w, sh = h;
+  if (S.stereo === 'sbs') sw = w / 2; else if (S.stereo === 'tb') sh = h / 2;
+  const cw = 160, ch = Math.max(1, Math.round(cw * sh / sw));
+  const c = document.createElement('canvas'); c.width = cw; c.height = ch;
+  const g = c.getContext('2d', { willReadFrequently: true });
+  let data;
+  try { g.drawImage(src.frameSource, 0, 0, sw, sh, 0, 0, cw, ch); data = g.getImageData(0, 0, cw, ch).data; }
+  catch (e) { if (!silent) toast('Couldn’t read this frame. Pick the screen color with the swatch instead.'); return; }
+  const fish = S.proj.startsWith('fish');
+  const bins = new Array(36).fill(0), px = [];
+  for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
+    if (fish) { const dx = (x + 0.5) / cw - 0.5, dy = (y + 0.5) / ch - 0.5; if (dx * dx + dy * dy > 0.23) continue; }
+    const i = (y * cw + x) * 4, r = data[i] / 255, gg = data[i + 1] / 255, b = data[i + 2] / 255;
+    const mx = Math.max(r, gg, b), mn = Math.min(r, gg, b), s = mx ? (mx - mn) / mx : 0;
+    if (s < 0.3 || mx < 0.18) continue;
+    let hue = mx === r ? ((gg - b) / (mx - mn)) % 6 : mx === gg ? (b - r) / (mx - mn) + 2 : (r - gg) / (mx - mn) + 4;
+    hue = (hue * 60 + 360) % 360; const bi = Math.floor(hue / 10) % 36;
+    bins[bi]++; px.push([r, gg, b, bi]);
+  }
+  const total = fish ? cw * ch * 0.72 : cw * ch;
+  let best = 0; for (let i = 1; i < 36; i++) if (bins[i] > bins[best]) best = i;
+  const near = (bi) => Math.min(Math.abs(bi - best), 36 - Math.abs(bi - best)) <= 1;
+  const sel = px.filter(p => near(p[3]));
+  if (sel.length < total * 0.06) { if (!silent) toast('No clear screen color found. Pick it with the swatch instead.'); return; }
+  const key = [0, 0, 0]; for (const p of sel) { key[0] += p[0]; key[1] += p[1]; key[2] += p[2]; }
+  key.forEach((v, i) => key[i] = v / sel.length);
+  const kc = cbcr(key);
+  const dists = sel.map(p => { const q = cbcr(p); return Math.hypot(q[0] - kc[0], q[1] - kc[1]); }).sort((a, b) => a - b);
+  const p95 = dists[Math.floor(dists.length * 0.95)] || 0.08;
+  setS({ keyOn: true, keyColor: key, tol: clamp(p95 + 0.03, 0.06, 0.35) });
+  if (!silent) toast('Screen color set. Fine-tune with Tolerance if edges look off.');
+}
+
+/* ---------- 2D UI ---------- */
+function syncControls() {
+  $('proj').value = S.proj; $('stereo').value = S.stereo; $('swap').checked = !!S.swap;
+  $('flatFov').value = S.flatFov; $('flatFovV').textContent = Math.round(S.flatFov) + '°';
+  $('flatRow').hidden = S.proj !== 'flat';
+  $('keyOn').checked = !!S.keyOn; $('keyColor').value = toHex(S.keyColor);
+  for (const k of ['tol', 'soft', 'spill']) { $(k).value = S[k]; $(k + 'V').textContent = S[k].toFixed(2); }
+  $('bgMode').value = S.bgMode;
+  $('bgYaw').value = S.bgYaw; $('bgYawV').textContent = Math.round(S.bgYaw) + '°';
+  $('bgHeight').value = S.bgHeight; $('bgHeightV').textContent = Math.round(S.bgHeight) + '°';
+  $('bgDim').value = S.bgDim; $('bgDimV').textContent = Math.round(S.bgDim * 100) + '%';
+  $('bgSize').value = S.bgSize; $('bgSizeV').textContent = Math.round(S.bgSize) + '°';
+  const bg = bgById(S.bgId);
+  $('bgSizeRow').hidden = !(bg && bg.tex && resolvedBgMode(bg) === 'wall');
+}
+function updateSpec() {
+  const src = current && current.source;
+  const parts = [];
+  if (src && src.ready) parts.push(src.width + '×' + src.height);
+  parts.push(PROJ[S.proj], STEREO[S.stereo]);
+  if (S.keyOn) parts.push('keyed ' + toHex(S.keyColor));
+  $('spec').textContent = parts.join(' · ');
+}
+function syncPlayButton() { const src = current && current.source; $('playBtn').textContent = src && !src.paused ? 'Pause' : 'Play'; }
+function updateTransport() {
+  const src = current && current.source;
+  const t = src ? src.time : 0, d = src ? src.duration : 0;
+  $('time').textContent = fmtTime(t) + ' / ' + fmtTime(d);
+  if (!seekDragging) $('seek').value = d > 0 && isFinite(d) ? Math.round(t / d * 1000) : 0;
+  syncPlayButton();
+}
+function renderVideoList() {
+  const ul = $('videoList'); ul.textContent = '';
+  videos.forEach((v, i) => {
+    const li = document.createElement('li'); li.className = 'vitem' + (v === current ? ' on' : '');
+    li.tabIndex = 0; li.setAttribute('role', 'button');
+    const box = document.createElement('div'); box.style.minWidth = '0';
+    const nm = document.createElement('div'); nm.className = 'vname'; nm.textContent = v.name; nm.title = v.name;
+    const meta = document.createElement('div'); meta.className = 'vmeta';
+    const st = v === current ? S : { ...DEFAULT_VIDEO, ...(v.detected || {}), ...(store.get('v:' + v.key, null) || {}) };
+    const chip = (txt, cls) => { const s = document.createElement('span'); s.className = 'chip' + (cls ? ' ' + cls : ''); s.textContent = txt; meta.appendChild(s); };
+    chip(PROJ[st.proj] + ' · ' + STEREO_SHORT[st.stereo]);
+    if (st.keyOn) chip('keyed', 'key');
+    if (v.alpha) chip('alpha-packed', 'warn');
+    if (v.size) chip(v.size >= 1073741824 ? (v.size / 1073741824).toFixed(1) + ' GB' : v.size >= 1048576 ? Math.round(v.size / 1048576) + ' MB' : Math.max(1, Math.round(v.size / 1024)) + ' KB');
+    box.append(nm, meta); li.appendChild(box);
+    if (!v.demo) {
+      const x = document.createElement('button'); x.className = 'x'; x.type = 'button'; x.textContent = '×'; x.setAttribute('aria-label', 'Remove ' + v.name);
+      x.addEventListener('click', (e) => { e.stopPropagation(); removeVideo(v); });
+      li.appendChild(x);
+    }
+    li.addEventListener('click', () => { if (v !== current) selectVideo(i, false); });
+    li.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (v !== current) selectVideo(i, false); } });
+    ul.appendChild(li);
+  });
+}
+function removeVideo(v) {
+  const i = videos.indexOf(v);
+  if (v === current) { if (v.source) v.source.dispose(); v.source = null; current = null; videos.splice(i, 1); selectVideo(Math.max(0, i - 1), false); }
+  else { videos.splice(i, 1); renderVideoList(); }
+}
+function renderBgGrid() {
+  const grid = $('bgGrid'); grid.textContent = '';
+  for (const b of bgs) {
+    const t = document.createElement('div'); t.className = 'bgtile' + (b.id === S.bgId ? ' on' : '');
+    t.tabIndex = 0; t.setAttribute('role', 'button'); t.setAttribute('aria-label', 'Backdrop: ' + b.name);
+    const img = document.createElement(b.thumb ? 'img' : 'span'); img.className = 'thumb';
+    if (b.thumb) { img.src = b.thumb; img.alt = ''; }
+    const cap = document.createElement('span'); cap.className = 'cap'; cap.textContent = b.name; cap.title = b.name;
+    t.append(img, cap);
+    if (b.kind === 'user') {
+      const x = document.createElement('button'); x.className = 'x'; x.type = 'button'; x.textContent = '×'; x.setAttribute('aria-label', 'Remove ' + b.name);
+      x.addEventListener('click', (e) => { e.stopPropagation(); removeBg(b); });
+      t.appendChild(x);
+    }
+    const pick = () => setS({ bgId: b.id });
+    t.addEventListener('click', pick);
+    t.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } });
+    grid.appendChild(t);
+  }
+}
+async function removeBg(b) {
+  const i = bgs.indexOf(b); if (i < 0) return;
+  bgs.splice(i, 1); if (b.tex) b.tex.dispose(); if (b.url) URL.revokeObjectURL(b.url);
+  await idb.del(b.id);
+  if (S.bgId === b.id) setS({ bgId: 'dusk' }); else renderBgGrid();
+}
+async function addImages(files) {
+  let last = null;
+  for (const f of files) {
+    const id = 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    try { const b = await bgFromBlob(f, f.name.replace(/\.[^.]+$/, ''), id, 'user'); bgs.push(b); last = b; await idb.put({ id, name: b.name, blob: f, added: Date.now() }); }
+    catch (e) { toast('Couldn’t open ' + f.name + '.'); }
+  }
+  if (last) setS({ bgId: last.id }); else renderBgGrid();
+}
+
+// wire 2D controls
+$('videoInput').addEventListener('change', (e) => { addFiles([...e.target.files]); e.target.value = ''; });
+$('imageInput').addEventListener('change', (e) => { addImages([...e.target.files]); e.target.value = ''; });
+for (const id of ['videoInput', 'imageInput']) {
+  const lab = document.querySelector(`label[for="${id}"]`);
+  lab.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $(id).click(); } });
+}
+$('proj').addEventListener('change', (e) => setS({ proj: e.target.value }));
+$('stereo').addEventListener('change', (e) => setS({ stereo: e.target.value }));
+$('swap').addEventListener('change', (e) => setS({ swap: e.target.checked }));
+$('flatFov').addEventListener('input', (e) => setS({ flatFov: +e.target.value }));
+$('keyOn').addEventListener('change', (e) => { setS({ keyOn: e.target.checked }); });
+$('keyColor').addEventListener('input', (e) => setS({ keyColor: fromHex(e.target.value), keyOn: true }));
+$('autoKey').addEventListener('click', () => autoKey(false));
+$('keyGreen').addEventListener('click', () => setS({ keyColor: KEY_PRESETS.green.slice(), keyOn: true }));
+$('keyBlue').addEventListener('click', () => setS({ keyColor: KEY_PRESETS.blue.slice(), keyOn: true }));
+for (const k of ['tol', 'soft', 'spill', 'bgYaw', 'bgHeight', 'bgDim', 'bgSize']) $(k).addEventListener('input', (e) => setS({ [k]: +e.target.value }));
+$('bgMode').addEventListener('change', (e) => setS({ bgMode: e.target.value }));
+
+function togglePlay() { const s = current && current.source; if (!s) return; if (s.paused) s.play().catch(() => toast('Press play again to start the video.')); else s.pause(); syncPlayButton(); panelDirty = true; }
+function seekBy(d) { const s = current && current.source; if (s) { s.seek(s.time + d); panelDirty = true; } }
+$('playBtn').addEventListener('click', togglePlay);
+$('back30').addEventListener('click', () => seekBy(-30));
+$('fwd30').addEventListener('click', () => seekBy(30));
+let seekDragging = false;
+$('seek').addEventListener('pointerdown', () => seekDragging = true);
+window.addEventListener('pointerup', () => seekDragging = false);
+$('seek').addEventListener('input', (e) => { const s = current && current.source; if (s && isFinite(s.duration)) s.seek(e.target.value / 1000 * s.duration); });
+window.addEventListener('keydown', (e) => {
+  if (e.target.closest && e.target.closest('input,select,textarea,[role=button],button')) return;
+  if (e.key === ' ') { e.preventDefault(); togglePlay(); }
+  else if (e.key === 'ArrowLeft') seekBy(-10);
+  else if (e.key === 'ArrowRight') seekBy(10);
+});
+
+// preview look-around
+const view = { yaw: 0, pitch: 0 };
+let drag = null;
+canvas.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY, yaw: view.yaw, pitch: view.pitch }; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener('pointermove', (e) => {
+  if (!drag) return; const k = camera.fov / canvas.clientHeight * Math.PI / 180;
+  view.yaw = drag.yaw + (e.clientX - drag.x) * k; view.pitch = clamp(drag.pitch + (e.clientY - drag.y) * k, -1.45, 1.45);
+});
+canvas.addEventListener('pointerup', () => drag = null);
+canvas.addEventListener('pointercancel', () => drag = null);
+canvas.addEventListener('wheel', (e) => { e.preventDefault(); camera.fov = clamp(camera.fov + e.deltaY * 0.04, 35, 110); camera.updateProjectionMatrix(); }, { passive: false });
+function resize() {
+  if (renderer.xr.isPresenting) return;
+  const r = $('screen').getBoundingClientRect();
+  renderer.setSize(Math.max(1, r.width), Math.max(1, r.height), false);
+  camera.aspect = r.width / Math.max(1, r.height); camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe($('screen'));
+
+/* ---------- VR menu (drawn on a canvas) ---------- */
+const PW = 1200, PH = 840;
+const pcanvas = document.createElement('canvas'); pcanvas.width = PW; pcanvas.height = PH;
+const pg = pcanvas.getContext('2d');
+const ptex = new THREE.CanvasTexture(pcanvas); ptex.colorSpace = THREE.SRGBColorSpace; ptex.anisotropy = Math.min(4, maxAniso);
+const panel = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.1 * PH / PW), new THREE.MeshBasicMaterial({ map: ptex, transparent: true, depthTest: false }));
+panel.renderOrder = 10; panel.visible = false; scene.add(panel);
+const css = getComputedStyle(document.documentElement);
+const C = { fg: css.getPropertyValue('--fg').trim(), muted: css.getPropertyValue('--muted').trim(), key: css.getPropertyValue('--key').trim(), keyHi: css.getPropertyValue('--key-hi').trim(), keyInk: css.getPropertyValue('--key-ink').trim() };
+const FONT = '"Figtree","Segoe UI",system-ui,sans-serif', MONO = '"IBM Plex Mono",ui-monospace,monospace';
+let panelDirty = true, pItems = [], menuOpen = false;
+
+function panelItems() {
+  const it = [], src = current && current.source;
+  const B = (id, x, y, w, h, label, act, o = {}) => it.push({ type: 'btn', id, x, y, w, h, label, act, ...o });
+  const Sl = (id, x, y, label, min, max, key, fmt) => it.push({ type: 'slider', id, x, y, w: 544, h: 58, label, min, max, key, fmt });
+  it.push({ type: 'seek', id: 'seek', x: 40, y: 98, w: 1120, h: 52 });
+  B('prev', 40, 166, 180, 80, '◀◀  Prev', () => stepVideo(-1));
+  B('b30', 236, 166, 180, 80, '−30 s', () => seekBy(-30));
+  B('play', 432, 166, 336, 80, src && !src.paused ? 'Pause' : 'Play', togglePlay, { accent: true, fs: 34 });
+  B('f30', 784, 166, 180, 80, '+30 s', () => seekBy(30));
+  B('next', 980, 166, 180, 80, 'Next  ▶▶', () => stepVideo(1));
+  B('keyOn', 40, 292, 270, 60, S.keyOn ? 'Replace: On' : 'Replace: Off', () => setS({ keyOn: !S.keyOn }), { active: S.keyOn, swatch: S.keyOn ? toHex(S.keyColor) : null });
+  B('auto', 326, 292, 200, 60, 'Auto key', () => autoKey(false));
+  B('green', 542, 292, 140, 60, 'Green', () => setS({ keyColor: KEY_PRESETS.green.slice(), keyOn: true }));
+  B('blue', 698, 292, 140, 60, 'Blue', () => setS({ keyColor: KEY_PRESETS.blue.slice(), keyOn: true }));
+  B('bgmode', 854, 292, 306, 60, 'Placement: ' + BGMODE[S.bgMode], () => setS({ bgMode: BGMODE_ORDER[(BGMODE_ORDER.indexOf(S.bgMode) + 1) % BGMODE_ORDER.length] }));
+  Sl('tol', 40, 368, 'Tolerance', 0.02, 0.45, 'tol', v => v.toFixed(2));
+  Sl('soft', 616, 368, 'Edge softness', 0.01, 0.3, 'soft', v => v.toFixed(2));
+  Sl('spill', 40, 432, 'Spill removal', 0.01, 0.6, 'spill', v => v.toFixed(2));
+  Sl('dim', 616, 432, 'Backdrop brightness', 0.15, 1.3, 'bgDim', v => Math.round(v * 100) + '%');
+  Sl('yaw', 40, 496, 'Rotate backdrop', -180, 180, 'bgYaw', v => Math.round(v) + '°');
+  Sl('height', 616, 496, 'Backdrop height', -40, 40, 'bgHeight', v => Math.round(v) + '°');
+  const bi = Math.max(0, bgs.findIndex(b => b.id === S.bgId));
+  B('bgprev', 40, 568, 110, 60, '◀', () => setS({ bgId: bgs[(bi - 1 + bgs.length) % bgs.length].id }), { fs: 30 });
+  it.push({ type: 'label', id: 'bgname', x: 166, y: 568, w: 868, h: 60, label: 'Backdrop: ' + (bgs[bi] ? bgs[bi].name : 'None') + '   (' + (bi + 1) + ' / ' + bgs.length + ')' });
+  B('bgnext', 1050, 568, 110, 60, '▶', () => setS({ bgId: bgs[(bi + 1) % bgs.length].id }), { fs: 30 });
+  B('proj', 40, 668, 320, 60, PROJ[S.proj], () => setS({ proj: PROJ_ORDER[(PROJ_ORDER.indexOf(S.proj) + 1) % PROJ_ORDER.length] }));
+  B('stereo', 376, 668, 320, 60, STEREO[S.stereo], () => setS({ stereo: STEREO_ORDER[(STEREO_ORDER.indexOf(S.stereo) + 1) % STEREO_ORDER.length] }));
+  B('swap', 712, 668, 220, 60, 'Swap eyes', () => setS({ swap: !S.swap }), { active: S.swap });
+  B('recenter', 948, 668, 212, 60, 'Recenter', recenter);
+  B('hide', 40, 744, 552, 60, 'Hide menu', () => setMenu(false));
+  B('exit', 608, 744, 552, 60, 'Exit VR', () => { const s = renderer.xr.getSession(); if (s) s.end(); });
+  return it;
+}
+function rr(g, x, y, w, h, r) { g.beginPath(); g.roundRect(x, y, w, h, r); }
+function fitText(g, s, max) { if (g.measureText(s).width <= max) return s; while (s.length > 1 && g.measureText(s + '…').width > max) s = s.slice(0, -1); return s + '…'; }
+function drawPanel(hovered) {
+  pItems = panelItems();
+  const g = pg; g.clearRect(0, 0, PW, PH);
+  rr(g, 2, 2, PW - 4, PH - 4, 34); g.fillStyle = 'rgba(16,19,24,0.94)'; g.fill();
+  g.lineWidth = 2; g.strokeStyle = 'rgba(255,255,255,0.10)'; g.stroke();
+  const src = current && current.source;
+  g.textBaseline = 'middle'; g.textAlign = 'left'; g.fillStyle = C.fg; g.font = '600 32px ' + FONT;
+  g.fillText(fitText(g, current ? current.name : 'No video', 760), 40, 56);
+  g.textAlign = 'right'; g.fillStyle = C.muted; g.font = '500 30px ' + MONO;
+  g.fillText(fmtTime(src ? src.time : 0) + ' / ' + fmtTime(src ? src.duration : 0), PW - 40, 56);
+  g.textAlign = 'left'; g.font = '700 20px ' + FONT; g.fillStyle = C.muted;
+  g.fillText('BACKGROUND REPLACEMENT', 42, 274); g.fillText('VIDEO FORMAT', 42, 650);
+  for (const it of pItems) {
+    const hov = hovered.has(it.id);
+    if (it.type === 'btn') {
+      rr(g, it.x, it.y, it.w, it.h, 16);
+      g.fillStyle = it.accent ? (hov ? C.keyHi : C.key) : it.active ? 'rgba(57,196,124,0.22)' : hov ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.07)';
+      g.fill();
+      if (it.active) { g.lineWidth = 3; g.strokeStyle = C.key; g.stroke(); }
+      g.fillStyle = it.accent ? C.keyInk : C.fg; g.font = `600 ${it.fs || 27}px ${FONT}`; g.textAlign = 'center';
+      let cx = it.x + it.w / 2;
+      if (it.swatch) { g.save(); g.fillStyle = it.swatch; g.beginPath(); g.arc(it.x + 30, it.y + it.h / 2, 11, 0, Math.PI * 2); g.fill(); g.restore(); cx += 18; g.fillStyle = C.fg; }
+      g.fillText(fitText(g, it.label, it.w - 28), cx, it.y + it.h / 2 + 1);
+    } else if (it.type === 'label') {
+      rr(g, it.x, it.y, it.w, it.h, 16); g.fillStyle = 'rgba(255,255,255,0.04)'; g.fill();
+      g.fillStyle = C.fg; g.font = '500 26px ' + FONT; g.textAlign = 'center';
+      g.fillText(fitText(g, it.label, it.w - 24), it.x + it.w / 2, it.y + it.h / 2 + 1);
+    } else if (it.type === 'slider') {
+      const v = S[it.key], f = clamp((v - it.min) / (it.max - it.min), 0, 1);
+      g.textAlign = 'left'; g.font = '500 23px ' + FONT; g.fillStyle = hov ? C.fg : '#c9c5bd'; g.fillText(it.label, it.x, it.y + 14);
+      g.textAlign = 'right'; g.font = '500 22px ' + MONO; g.fillStyle = C.muted; g.fillText(it.fmt(v), it.x + it.w, it.y + 14);
+      const ty = it.y + 42;
+      rr(g, it.x, ty - 5, it.w, 10, 5); g.fillStyle = 'rgba(255,255,255,0.14)'; g.fill();
+      rr(g, it.x, ty - 5, Math.max(10, it.w * f), 10, 5); g.fillStyle = C.key; g.fill();
+      g.beginPath(); g.arc(it.x + it.w * f, ty, hov ? 16 : 13, 0, Math.PI * 2); g.fillStyle = '#f2efe9'; g.fill();
+    } else if (it.type === 'seek') {
+      const d = src && isFinite(src.duration) ? src.duration : 0, f = d ? clamp(src.time / d, 0, 1) : 0;
+      const ty = it.y + it.h / 2;
+      rr(g, it.x, ty - (hov ? 8 : 6), it.w, hov ? 16 : 12, 8); g.fillStyle = 'rgba(255,255,255,0.14)'; g.fill();
+      rr(g, it.x, ty - (hov ? 8 : 6), Math.max(12, it.w * f), hov ? 16 : 12, 8); g.fillStyle = C.key; g.fill();
+      g.beginPath(); g.arc(it.x + it.w * f, ty, hov ? 18 : 14, 0, Math.PI * 2); g.fillStyle = '#f2efe9'; g.fill();
+    }
+  }
+  ptex.needsUpdate = true;
+}
+function itemAt(x, y) { for (const it of pItems) if (it.type !== 'label' && x >= it.x && x <= it.x + it.w && y >= it.y - 6 && y <= it.y + it.h + 6) return it; return null; }
+function dragTo(it, x) {
+  const f = clamp((x - it.x) / it.w, 0, 1);
+  if (it.type === 'seek') { const s = current && current.source; if (s && isFinite(s.duration)) s.seek(f * s.duration); panelDirty = true; }
+  else if (it.type === 'slider') setS({ [it.key]: it.min + f * (it.max - it.min) });
+}
+
+/* ---------- XR session ---------- */
+const head = { pos: new THREE.Vector3(), quat: new THREE.Quaternion(), scale: new THREE.Vector3() };
+const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+function headYaw() { euler.setFromQuaternion(head.quat, 'YXZ'); return euler.y; }
+function recenter() {
+  if (renderer.xr.isPresenting) content.rotation.y = headYaw();
+  else { view.yaw = 0; view.pitch = 0; }
+  panelDirty = true;
+}
+function placePanel() {
+  const yaw = headYaw();
+  const off = new THREE.Vector3(0, -0.28, -0.85).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+  panel.position.copy(head.pos).add(off);
+  panel.rotation.set(-0.3, yaw, 0, 'YXZ');
+}
+function setMenu(open) { menuOpen = open; if (open) placePanel(); panel.visible = open && renderer.xr.isPresenting; panelDirty = true; }
+
+const raycaster = new THREE.Raycaster();
+const tmpMat = new THREE.Matrix4();
+const cursorGeo = new THREE.SphereGeometry(0.008, 12, 8);
+const ctrls = [0, 1].map((i) => {
+  const c = renderer.xr.getController(i);
+  const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)]), new THREE.LineBasicMaterial({ color: 0xf2efe9, transparent: true, opacity: 0.55 }));
+  line.scale.z = 2; line.visible = false; c.add(line);
+  const cursor = new THREE.Mesh(cursorGeo, new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false }));
+  cursor.renderOrder = 11; cursor.visible = false; scene.add(cursor);
+  const st = { c, line, cursor, src: null, hover: null, hit: null, prev: [], drag: null, lastSeek: 0 };
+  c.addEventListener('connected', (e) => { st.src = e.data; line.visible = true; });
+  c.addEventListener('disconnected', () => { st.src = null; line.visible = false; cursor.visible = false; });
+  c.addEventListener('selectstart', () => {
+    if (!menuOpen) { setMenu(true); return; }
+    const it = st.hover; if (!it) return;
+    if (it.type === 'btn') it.act();
+    else if (it.type === 'slider' || it.type === 'seek') { st.drag = it; if (st.hit) dragTo(it, st.hit.x); }
+  });
+  c.addEventListener('selectend', () => { st.drag = null; });
+  scene.add(c);
+  return st;
+});
+
+let placeCountdown = 0;
+function updateXR(now) {
+  const xrCam = renderer.xr.getCamera();
+  xrCam.matrixWorld.decompose(head.pos, head.quat, head.scale);
+  content.position.copy(head.pos);
+  if (placeCountdown > 0 && --placeCountdown === 0) { recenter(); setMenu(true); }
+  panel.visible = menuOpen;
+  let hoverChanged = false;
+  for (const st of ctrls) {
+    st.c.updateMatrixWorld(true);
+    let hit = null;
+    if (menuOpen && st.src) {
+      tmpMat.identity().extractRotation(st.c.matrixWorld);
+      raycaster.ray.origin.setFromMatrixPosition(st.c.matrixWorld);
+      raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tmpMat);
+      const hits = raycaster.intersectObject(panel, false);
+      if (hits.length && hits[0].uv) hit = hits[0];
+    }
+    st.hit = hit ? { x: hit.uv.x * PW, y: (1 - hit.uv.y) * PH } : null;
+    st.line.scale.z = hit ? hit.distance : 2;
+    st.cursor.visible = !!hit; if (hit) st.cursor.position.copy(hit.point);
+    const it = st.hit ? itemAt(st.hit.x, st.hit.y) : null;
+    if (it !== st.hover) { st.hover = it; hoverChanged = true; }
+    if (st.drag && st.hit) dragTo(st.drag, st.hit.x);
+    const gp = st.src && st.src.gamepad;
+    if (gp) {
+      const pressed = gp.buttons.map(b => b.pressed);
+      const edge = (i) => pressed[i] && !st.prev[i];
+      if (edge(4)) togglePlay();
+      if (edge(5)) setMenu(!menuOpen);
+      const ax = gp.axes.length > 2 ? gp.axes[2] : 0;
+      if (Math.abs(ax) > 0.75 && now - st.lastSeek > 450) { seekBy(Math.sign(ax) * 10); st.lastSeek = now; }
+      st.prev = pressed;
+    }
+  }
+  if (hoverChanged) panelDirty = true;
+}
+function hoveredSet() { const s = new Set(); for (const st of ctrls) { if (st.hover) s.add(st.hover.id); if (st.drag) s.add(st.drag.id); } return s; }
+
+async function enterVR() {
+  if (!navigator.xr) return;
+  const src = current && current.source;
+  if (src && src.paused) src.play().catch(() => { });
+  try {
+    const session = await navigator.xr.requestSession('immersive-vr', { optionalFeatures: ['local-floor'] });
+    camera.layers.disable(1);
+    await renderer.xr.setSession(session);
+    try { renderer.xr.setFoveation(0.5); } catch (e) { }
+    if (session.updateTargetFrameRate) session.updateTargetFrameRate(72).catch(() => { });
+    placeCountdown = 3; menuOpen = false;
+    session.addEventListener('end', () => {
+      camera.layers.enable(1); menuOpen = false; panel.visible = false;
+      content.position.set(0, 0, 0); content.rotation.set(0, 0, 0);
+      for (const st of ctrls) { st.cursor.visible = false; st.drag = null; st.hover = null; }
+      resize();
+    });
+  } catch (e) {
+    toast('Couldn’t start VR: ' + (e && e.message ? e.message : 'the browser refused.'), 5000);
+  }
+}
+$('enterVR').addEventListener('click', enterVR);
+async function checkXR() {
+  const note = $('xrNote'), btn = $('enterVR');
+  let ok = false;
+  try { ok = !!navigator.xr && await navigator.xr.isSessionSupported('immersive-vr'); } catch (e) { ok = false; }
+  btn.disabled = !ok;
+  if (!ok) {
+    note.classList.add('warn');
+    note.textContent = !window.isSecureContext ? 'VR needs an https:// address. Open this page from its https link.' : 'Open this page in the Quest Browser to enter VR. You can preview and tune here.';
+  }
+}
+checkXR();
+
+/* ---------- loop ---------- */
+let lastT = performance.now(), lastUI = 0, lastPanel = 0;
+renderer.setAnimationLoop(() => {
+  const now = performance.now(), dt = Math.min(0.1, (now - lastT) / 1000); lastT = now;
+  const src = current && current.source;
+  if (src) src.update(dt, now);
+  if (renderer.xr.isPresenting) {
+    updateXR(now);
+    if (menuOpen && (panelDirty || now - lastPanel > 500)) { drawPanel(hoveredSet()); lastPanel = now; panelDirty = false; }
+  } else {
+    content.position.set(0, 0, 0);
+    camera.rotation.set(view.pitch, view.yaw, 0, 'YXZ');
+  }
+  if (now - lastUI > 250) { updateTransport(); lastUI = now; }
+  renderer.render(scene, camera);
+});
+
+/* ---------- boot ---------- */
+async function boot() {
+  const saved = await idb.all();
+  saved.sort((a, b) => (a.added || 0) - (b.added || 0));
+  for (const rec of saved) { try { bgs.push(await bgFromBlob(rec.blob, rec.name, rec.id, 'user')); } catch (e) { } }
+  // Optional: pictures shipped next to this page in backgrounds/list.json (["file.jpg", ...])
+  try {
+    const r = await fetch('backgrounds/list.json', { cache: 'no-cache' });
+    if (r.ok) for (const f of await r.json()) {
+      try { const b = await (await fetch('backgrounds/' + encodeURIComponent(f))).blob(); bgs.push(await bgFromBlob(b, f.replace(/\.[^.]+$/, ''), 'b:' + f, 'bundled')); } catch (e) { }
+    }
+  } catch (e) { }
+  if (!bgById(S.bgId)) S.bgId = 'dusk';
+  renderBgGrid(); apply(); syncControls(); panelDirty = true;
+}
+renderBgGrid(); renderVideoList(); resize();
+selectVideo(0, false);
+demo.play();
+boot();
+if (document.fonts) document.fonts.ready.then(() => { panelDirty = true; });
+window.__greenroom = { S, videos, setS, drawPanel: () => { drawPanel(new Set()); return pcanvas.toDataURL('image/png'); }, autoKey, selectVideo };
+</script>
+</body>
+</html>
