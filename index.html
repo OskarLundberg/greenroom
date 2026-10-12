@@ -217,7 +217,7 @@ h2{font-family:var(--display);font-weight:700;font-size:20px;letter-spacing:-.01
         <div class="bin-head"><h2>Videos</h2><label class="btn primary small" for="videoInput" tabindex="0">Add videos</label></div>
         <input id="videoInput" type="file" accept="video/*,image/*,.mkv,.mp4,.webm,.mov,.jpg,.jpeg,.png,.webp" multiple hidden>
         <ul class="vlist" id="videoList"></ul>
-        <p class="fine">Videos play straight from the headset's storage. Nothing is uploaded. Pictures picked here are added to Backdrops.</p>
+        <p class="fine">Videos play straight from this device's storage. Nothing is uploaded. Pictures picked here are added to Backdrops.</p>
       </section>
       <section>
         <div class="bin-head"><h2>Backdrops</h2><label class="btn small" for="imageInput" tabindex="0">Add pictures</label></div>
@@ -230,9 +230,18 @@ h2{font-family:var(--display);font-weight:700;font-size:20px;letter-spacing:-.01
 
   <section class="how" aria-label="How to use">
     <div>
-      <h3>On your Quest 2</h3>
+      <h3>From your laptop (Quest Link)</h3>
       <ol>
-        <li>Connect the headset to your PC with a USB-C cable, choose Allow in the headset, and copy videos into <b>Movies</b> and pictures into <b>Pictures</b>.</li>
+        <li>Install the Meta Quest Link app on the laptop. In it, go to <b>Settings → General</b> and set Meta Quest Link as the active OpenXR runtime.</li>
+        <li>Open this page in Chrome or Edge on the laptop and add videos and pictures from the laptop's drive.</li>
+        <li>Connect the Quest with a USB-C cable or Air Link, and start Quest Link in the headset.</li>
+        <li>Click <b>Enter VR</b> on the laptop and put the headset on. If the sound plays from the laptop, set Windows sound output to the Oculus headphones.</li>
+      </ol>
+    </div>
+    <div>
+      <h3>On the Quest alone</h3>
+      <ol>
+        <li>Connect the headset to your PC with a USB-C cable, choose Allow in the headset, and copy videos and pictures into <b>Download</b>.</li>
         <li>Open this page in the Quest Browser.</li>
         <li>Tap <b>Add videos</b> and <b>Add pictures</b> and pick files from the headset.</li>
         <li>Press <b>Enter VR</b>. The menu opens in front of you.</li>
@@ -258,6 +267,7 @@ h2{font-family:var(--display);font-weight:700;font-size:20px;letter-spacing:-.01
 import * as THREE from 'three';
 
 /* ---------- helpers ---------- */
+const ON_HEADSET = /OculusBrowser|Quest|Pico|Wolvic/i.test(navigator.userAgent);
 const $ = (id) => document.getElementById(id);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const fmtTime = (s) => { if (!isFinite(s) || s < 0) s = 0; s = Math.floor(s); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0'); };
@@ -1141,7 +1151,8 @@ async function enterVR() {
     camera.layers.disable(1);
     await renderer.xr.setSession(session);
     try { renderer.xr.setFoveation(0.5); } catch (e) { }
-    if (session.updateTargetFrameRate) session.updateTargetFrameRate(72).catch(() => { });
+    // On the Quest itself, 72 Hz saves power for video; over Link the PC keeps the refresh rate set in the Link app.
+    if (ON_HEADSET && session.updateTargetFrameRate) session.updateTargetFrameRate(72).catch(() => { });
     placeCountdown = 3; menuOpen = false;
     session.addEventListener('end', () => {
       camera.layers.enable(1); menuOpen = false; panel.visible = false;
@@ -1159,11 +1170,14 @@ async function checkXR() {
   let ok = false;
   try { ok = !!navigator.xr && await navigator.xr.isSessionSupported('immersive-vr'); } catch (e) { ok = false; }
   btn.disabled = !ok;
-  if (!ok) {
-    note.classList.add('warn');
-    note.textContent = !window.isSecureContext ? 'VR needs an https:// address. Open this page from its https link.' : 'Open this page in the Quest Browser to enter VR. You can preview and tune here.';
-  }
+  note.classList.toggle('warn', !ok);
+  if (ok) note.textContent = ON_HEADSET ? '' : 'Start Quest Link in the headset, then click Enter VR.';
+  else if (!window.isSecureContext) note.textContent = 'VR needs an https:// address. Open this page from its https link.';
+  else if (!navigator.xr) note.textContent = 'This browser can’t do VR. Use the Quest Browser, or Chrome or Edge on a PC with Quest Link.';
+  else note.textContent = 'No headset found. Connect your Quest with Quest Link (cable or Air Link) and this button turns on. You can preview and tune here meanwhile.';
 }
+if (navigator.xr && navigator.xr.addEventListener) navigator.xr.addEventListener('devicechange', checkXR);
+setInterval(() => { if (!renderer.xr.isPresenting && $('enterVR').disabled && document.visibilityState === 'visible') checkXR(); }, 4000);
 checkXR();
 
 /* ---------- loop ---------- */
