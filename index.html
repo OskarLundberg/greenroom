@@ -133,6 +133,22 @@ h2{font-family:var(--display);font-weight:700;font-size:20px;letter-spacing:-.01
 .toast{position:fixed;left:50%;bottom:max(20px,env(safe-area-inset-bottom,0px));transform:translateX(-50%) translateY(20px);background:#23303a;border:1px solid #33424e;color:var(--fg);padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;max-width:calc(100% - 32px);z-index:10}
 .toast.show{opacity:1;transform:translateX(-50%)}
 #vbin{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none;overflow:hidden}
+.seg{position:relative;display:inline-flex;flex-wrap:wrap;gap:3px;padding:3px;border:1px solid var(--line);border-radius:10px;background:var(--panel-2);max-width:100%;margin-top:6px}
+.seg input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+.seg label{padding:7px 12px;border-radius:7px;font-weight:600;font-size:13.5px;line-height:1.2;cursor:pointer;color:#c9c5bd;white-space:nowrap}
+.seg label:hover{color:var(--fg);background:rgba(255,255,255,.05)}
+.seg input:checked+label{background:var(--key);color:var(--key-ink)}
+.seg input:focus-visible+label{outline:2px solid var(--key-hi);outline-offset:1px}
+.desk .wide.block{display:block}
+.wallsadd{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px}
+.wallsadd select{width:auto;flex:1 1 200px;min-width:0}
+.walllist{list-style:none;margin:12px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:10px}
+.wall{border:1px solid var(--line);border-radius:10px;background:var(--panel-2);padding:10px 12px 12px;min-width:0}
+.whead{display:grid;grid-template-columns:64px minmax(0,1fr) auto;align-items:center;gap:10px}
+.wthumb{width:64px;height:36px;object-fit:cover;border-radius:5px;background:var(--check-a);display:block}
+.wname{font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wall .row{grid-template-columns:76px minmax(0,1fr) 52px;margin-top:8px}
+.walls-empty{margin:4px 0 0;color:var(--muted);font-size:13.5px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -171,21 +187,32 @@ h2{font-family:var(--display);font-weight:700;font-size:20px;letter-spacing:-.01
         <fieldset class="wide">
           <legend>Background replacement</legend>
           <div>
-          <div class="switch">
-            <div><strong>Replace screen color</strong><div class="fine" style="margin:2px 0 0">For green-screen and passthrough videos</div></div>
-            <input id="keyOn" class="toggle" type="checkbox" aria-label="Replace screen color">
-          </div>
-          <div class="keyrow">
-            <label class="swatch" title="Screen color"><input id="keyColor" type="color" value="#00b140" aria-label="Screen color"></label>
-            <button id="autoKey" class="btn small" type="button">Auto-detect</button>
-            <button id="keyGreen" class="btn small ghost" type="button">Green</button>
-            <button id="keyBlue" class="btn small ghost" type="button">Blue</button>
-          </div>
+            <div class="seg" role="radiogroup" aria-label="Background replacement">
+              <input type="radio" name="matte" id="mOff" value="off"><label for="mOff">Off</label>
+              <input type="radio" name="matte" id="mColor" value="color"><label for="mColor">Screen color</label>
+              <input type="radio" name="matte" id="mPacked" value="packed"><label for="mPacked">Passthrough mask</label>
+            </div>
+            <p class="fine" id="matteHint"></p>
+            <div class="keyrow">
+              <button id="autoKey" class="btn small" type="button">Auto-detect</button>
+              <span class="keyrow" id="colorTools" style="margin:0">
+                <label class="swatch" title="Screen color"><input id="keyColor" type="color" value="#00b140" aria-label="Screen color"></label>
+                <button id="keyGreen" class="btn small ghost" type="button">Green</button>
+                <button id="keyBlue" class="btn small ghost" type="button">Blue</button>
+              </span>
+            </div>
           </div>
           <div>
-          <div class="row"><label for="tol">Tolerance</label><input id="tol" type="range" min="0.02" max="0.45" step="0.005"><output id="tolV"></output></div>
-          <div class="row"><label for="soft">Softness</label><input id="soft" type="range" min="0.01" max="0.3" step="0.005"><output id="softV"></output></div>
-          <div class="row"><label for="spill">Spill removal</label><input id="spill" type="range" min="0.01" max="0.6" step="0.005"><output id="spillV"></output></div>
+            <div id="colorRows">
+              <div class="row"><label for="tol">Tolerance</label><input id="tol" type="range" min="0.02" max="0.45" step="0.005"><output id="tolV"></output></div>
+              <div class="row"><label for="soft">Softness</label><input id="soft" type="range" min="0.01" max="0.3" step="0.005"><output id="softV"></output></div>
+              <div class="row"><label for="spill">Spill removal</label><input id="spill" type="range" min="0.01" max="0.6" step="0.005"><output id="spillV"></output></div>
+            </div>
+            <div id="maskRows">
+              <div class="row"><label for="maskCut">Tighten edges</label><input id="maskCut" type="range" min="0" max="0.6" step="0.01"><output id="maskCutV"></output></div>
+              <p class="fine">Raise this if a thin outline of the original room shows around people.</p>
+            </div>
+            <p class="fine" id="offNote">Pick a mode to put your backdrop and pictures behind the people in the video.</p>
           </div>
         </fieldset>
 
@@ -209,6 +236,16 @@ h2{font-family:var(--display);font-weight:700;font-size:20px;letter-spacing:-.01
           <div class="switch" style="margin-top:12px"><span>Swap eyes</span><input id="swap" class="toggle" type="checkbox" aria-label="Swap eyes"></div>
           <p class="fine">Picked from the file name (_180, _LR, _TB, FISHEYE190, MKX200…) and the video's shape. Settings are remembered per file.</p>
         </fieldset>
+
+        <fieldset class="wide block" id="wallsBox">
+          <legend>Pictures around you</legend>
+          <div class="wallsadd">
+            <select id="wallPick" aria-label="Picture to hang"></select>
+            <button id="wallAdd" class="btn small primary" type="button">Hang picture</button>
+          </div>
+          <p class="fine">Hung pictures float around you behind the people in the video, like posters on the walls of a room, and your backdrop fills the rest. A new picture goes where you're looking. In VR, point at a picture and hold the trigger to move it.</p>
+          <ul class="walllist" id="wallList"></ul>
+        </fieldset>
       </div>
     </section>
 
@@ -223,7 +260,7 @@ h2{font-family:var(--display);font-weight:700;font-size:20px;letter-spacing:-.01
         <div class="bin-head"><h2>Backdrops</h2><label class="btn small" for="imageInput" tabindex="0">Add pictures</label></div>
         <input id="imageInput" type="file" accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.avif" multiple hidden>
         <div class="bggrid" id="bgGrid"></div>
-        <p class="fine">Pictures you add are kept in this browser, so they're here next time. Wide 2:1 panoramas wrap all the way around; other photos hang as a wall.</p>
+        <p class="fine">Tap a picture to make it the backdrop that fills the see-through area. Wide 2:1 panoramas wrap all the way around; other photos become one big wall. Pictures are kept in this browser, so they're here next time.</p>
       </section>
     </aside>
   </div>
@@ -255,6 +292,7 @@ h2{font-family:var(--display);font-weight:700;font-size:20px;letter-spacing:-.01
         <kbd>B / Y</kbd><span>Show or hide the menu</span>
         <kbd>Stick ← →</kbd><span>Skip back or forward 10 seconds</span>
         <kbd>Recenter</kbd><span>Menu button. Turns the video to face you</span>
+        <kbd>Hold trigger</kbd><span>On a hung picture: move it. While holding, the stick changes distance and size, and A/X takes it down</span>
       </div>
     </div>
   </section>
@@ -270,6 +308,7 @@ import * as THREE from 'three';
 const ON_HEADSET = /OculusBrowser|Quest|Pico|Wolvic/i.test(navigator.userAgent);
 const $ = (id) => document.getElementById(id);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const normDeg = (d) => ((d + 180) % 360 + 360) % 360 - 180;
 const fmtTime = (s) => { if (!isFinite(s) || s < 0) s = 0; s = Math.floor(s); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0'); };
 const toHex = (rgb) => '#' + rgb.map(c => Math.round(clamp(c, 0, 1) * 255).toString(16).padStart(2, '0')).join('');
 const fromHex = (h) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
@@ -304,9 +343,19 @@ const STEREO_ORDER = ['sbs', 'tb', 'mono'];
 const BGMODE = { auto: 'Auto', pano: 'Panorama', wall: 'Wall', dome: 'Dome' };
 const BGMODE_ORDER = ['auto', 'pano', 'wall', 'dome'];
 const KEY_PRESETS = { green: [0, 177 / 255, 64 / 255], blue: [0, 71 / 255, 187 / 255] };
-const VIDEO_KEYS = ['proj', 'stereo', 'swap', 'flatFov', 'keyOn', 'keyColor', 'tol', 'soft', 'spill'];
+const MATTE = { off: 'Off', color: 'Screen color', packed: 'Passthrough mask' };
+const MATTE_ORDER = ['off', 'color', 'packed'];
+const MATTE_HINT = {
+  off: 'Nothing is replaced. The whole video shows.',
+  color: 'Replaces a green, blue or other flat screen color with your backdrop and pictures.',
+  packed: 'Uses the cut-out shape stored in passthrough videos (red shapes in the corners of the frame). Needs a fisheye side-by-side video.',
+};
+const MAX_WALLS = 12;
+const VIDEO_KEYS = ['proj', 'stereo', 'swap', 'flatFov', 'matte', 'keyColor', 'tol', 'soft', 'spill', 'maskCut'];
 const BG_KEYS = ['bgId', 'bgMode', 'bgYaw', 'bgHeight', 'bgDim', 'bgSize'];
-const DEFAULT_VIDEO = { proj: '180', stereo: 'sbs', swap: false, flatFov: 80, keyOn: false, keyColor: KEY_PRESETS.green.slice(), tol: 0.15, soft: 0.08, spill: 0.12 };
+const DEFAULT_VIDEO = { proj: '180', stereo: 'sbs', swap: false, flatFov: 80, matte: 'off', keyColor: KEY_PRESETS.green.slice(), tol: 0.15, soft: 0.08, spill: 0.12, maskCut: 0.06 };
+// Settings saved before the mode switch existed used a keyOn flag.
+function migrateVideo(o) { if (!o) return o; o = { ...o }; if (o.matte === undefined && o.keyOn !== undefined) o.matte = o.keyOn ? 'color' : 'off'; delete o.keyOn; return o; }
 const DEFAULT_BG = { bgId: 'dusk', bgMode: 'auto', bgYaw: 0, bgHeight: 0, bgDim: 0.9, bgSize: 100 };
 const S = { ...DEFAULT_VIDEO, ...DEFAULT_BG, ...store.get('bg', {}) };
 
@@ -325,52 +374,22 @@ const camera = new THREE.PerspectiveCamera(75, 16 / 9, 0.05, 100);
 camera.layers.enable(1);
 scene.add(camera);
 
+// Layers, back to front: backdrop sphere, pictures hung around you (real depth), then the video with its see-through parts cut out.
 const VS = `
 varying vec3 vDir;
 void main(){
   vDir = position;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }`;
-const FS = `
+const COMMON = `
 precision highp float;
-uniform sampler2D uMap; uniform bool uHasMap;
-uniform vec4 uEye; uniform int uProj; uniform float uFov; uniform float uAspect;
-uniform bool uKeyOn; uniform vec2 uKeyCC; uniform float uTol; uniform float uSoft; uniform float uSpill;
+const float PI = 3.14159265358979;
+`;
+const BG_FS = COMMON + `
 uniform sampler2D uBg; uniform bool uHasBg; uniform int uBgMode;
 uniform float uBgYaw; uniform float uBgPitch; uniform float uBgDim; uniform float uBgFov; uniform float uBgAspect;
 uniform vec3 uBgFill;
 varying vec3 vDir;
-const float PI = 3.14159265358979;
-
-vec2 cbcr(vec3 c){
-  return vec2(dot(c, vec3(-0.100644, -0.338572, 0.439216)) + 0.501961,
-              dot(c, vec3(0.439216, -0.398942, -0.040274)) + 0.501961);
-}
-
-bool projUV(vec3 d, out vec2 uv){
-  if(uProj == 0){
-    float lon = atan(d.x, -d.z); float lat = asin(clamp(d.y, -1.0, 1.0));
-    uv = vec2(0.5 + lon / PI, 0.5 + lat / PI);
-    return abs(lon) <= PI * 0.5;
-  } else if(uProj == 1){
-    float lon = atan(d.x, -d.z); float lat = asin(clamp(d.y, -1.0, 1.0));
-    uv = vec2(0.5 + lon / (2.0 * PI), 0.5 + lat / PI);
-    return true;
-  } else if(uProj == 2){
-    float theta = acos(clamp(-d.z, -1.0, 1.0));
-    float r = theta / uFov;
-    float len = length(d.xy);
-    vec2 dir2 = len > 1e-6 ? d.xy / len : vec2(0.0);
-    uv = vec2(0.5) + dir2 * r;
-    return r <= 0.5;
-  } else {
-    float z = max(-d.z, 1e-4);
-    vec2 p = d.xy / z;
-    float hw = tan(uFov * 0.5);
-    uv = vec2(0.5 + p.x / (2.0 * hw), 0.5 + p.y * uAspect / (2.0 * hw));
-    return d.z < -0.01 && uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0;
-  }
-}
 
 vec3 sampleBg(vec3 d){
   if(!uHasBg) return uBgFill;
@@ -403,42 +422,95 @@ vec3 sampleBg(vec3 d){
   vec3 c = textureGrad(uBg, clamp(uv, 0.0, 1.0), dx, dy).rgb * uBgDim;
   return mix(uBgFill, c, inside);
 }
+void main(){ gl_FragColor = vec4(sampleBg(normalize(vDir)), 1.0); }`;
+
+const VIDEO_FS = COMMON + `
+uniform sampler2D uMap; uniform bool uHasMap;
+uniform vec4 uEye; uniform int uProj; uniform float uFov; uniform float uAspect;
+uniform int uMatte; uniform vec2 uKeyCC; uniform float uTol; uniform float uSoft; uniform float uSpill;
+uniform float uMaskLo; uniform float uMaskHi;
+varying vec3 vDir;
+
+vec2 cbcr(vec3 c){
+  return vec2(dot(c, vec3(-0.100644, -0.338572, 0.439216)) + 0.501961,
+              dot(c, vec3(0.439216, -0.398942, -0.040274)) + 0.501961);
+}
+
+bool projUV(vec3 d, out vec2 uv){
+  if(uProj == 0){
+    float lon = atan(d.x, -d.z); float lat = asin(clamp(d.y, -1.0, 1.0));
+    uv = vec2(0.5 + lon / PI, 0.5 + lat / PI);
+    return abs(lon) <= PI * 0.5;
+  } else if(uProj == 1){
+    float lon = atan(d.x, -d.z); float lat = asin(clamp(d.y, -1.0, 1.0));
+    uv = vec2(0.5 + lon / (2.0 * PI), 0.5 + lat / PI);
+    return true;
+  } else if(uProj == 2){
+    float theta = acos(clamp(-d.z, -1.0, 1.0));
+    float r = theta / uFov;
+    float len = length(d.xy);
+    vec2 dir2 = len > 1e-6 ? d.xy / len : vec2(0.0);
+    uv = vec2(0.5) + dir2 * r;
+    return r <= 0.5;
+  } else {
+    float z = max(-d.z, 1e-4);
+    vec2 p = d.xy / z;
+    float hw = tan(uFov * 0.5);
+    uv = vec2(0.5 + p.x / (2.0 * hw), 0.5 + p.y * uAspect / (2.0 * hw));
+    return d.z < -0.01 && uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0;
+  }
+}
+
+// Passthrough mask packed DeoVR-style into a side-by-side fisheye frame: the cut-out shape of
+// both eyes is shrunk to 40% and split into six pieces that sit in the black corners
+// around the two fisheye circles (red or white = keep, black = see-through).
+float packedAlpha(vec2 uv){
+  float u = clamp(uv.x, 0.0, 1.0), v = clamp(1.0 - uv.y, 0.0, 1.0); // v measured from the top
+  float fy = v < 0.5 ? 0.8 + v * 0.4 : (v - 0.5) * 0.4;
+  float fx = uEye.x < 0.25 ? 0.4 + u * 0.2 : (u < 0.5 ? 0.9 + u * 0.2 : (u - 0.5) * 0.2);
+  float m = texture2D(uMap, vec2(fx, 1.0 - fy)).r;
+  return clamp((m - uMaskLo) / (uMaskHi - uMaskLo), 0.0, 1.0);
+}
 
 void main(){
-  vec3 d = normalize(vDir);
-  vec3 bg = sampleBg(d);
+  if(!uHasMap) discard;
   vec2 uv;
-  bool inside = projUV(d, uv);
-  vec3 col = bg;
-  if(uHasMap && inside){
-    vec3 v = texture2D(uMap, uEye.xy + uv * uEye.zw).rgb;
-    float a = 1.0;
-    if(uKeyOn){
-      float base = distance(cbcr(v), uKeyCC) - uTol;
-      a = pow(clamp(base / uSoft, 0.0, 1.0), 1.5);
-      float sp = pow(clamp(base / uSpill, 0.0, 1.0), 1.5);
-      float desat = dot(v, vec3(0.2126, 0.7152, 0.0722));
-      v = mix(vec3(desat), v, sp);
-    }
-    col = mix(bg, v, a);
+  if(!projUV(normalize(vDir), uv)) discard;
+  vec3 v = texture2D(uMap, uEye.xy + uv * uEye.zw).rgb;
+  float a = 1.0;
+  if(uMatte == 1){
+    float base = distance(cbcr(v), uKeyCC) - uTol;
+    a = pow(clamp(base / uSoft, 0.0, 1.0), 1.5);
+    float sp = pow(clamp(base / uSpill, 0.0, 1.0), 1.5);
+    float desat = dot(v, vec3(0.2126, 0.7152, 0.0722));
+    v = mix(vec3(desat), v, sp);
+  } else if(uMatte == 2){
+    a = packedAlpha(uv);
   }
-  gl_FragColor = vec4(col, 1.0);
+  gl_FragColor = vec4(v, a);
 }`;
 
-const shared = {
-  uMap: { value: null }, uHasMap: { value: false },
-  uProj: { value: 0 }, uFov: { value: Math.PI }, uAspect: { value: 1 },
-  uKeyOn: { value: false }, uKeyCC: { value: new THREE.Vector2() }, uTol: { value: 0.15 }, uSoft: { value: 0.08 }, uSpill: { value: 0.12 },
+const bgU = {
   uBg: { value: null }, uHasBg: { value: false }, uBgMode: { value: 0 },
   uBgYaw: { value: 0 }, uBgPitch: { value: 0 }, uBgDim: { value: 1 }, uBgFov: { value: 1.7 }, uBgAspect: { value: 1.5 },
   uBgFill: { value: new THREE.Vector3(0.043, 0.051, 0.063) },
 };
-const makeEyeMat = () => new THREE.ShaderMaterial({
-  uniforms: { ...shared, uEye: { value: new THREE.Vector4(0, 0, 1, 1) } },
-  vertexShader: VS, fragmentShader: FS, side: THREE.BackSide, depthWrite: false, depthTest: false,
-});
+const vidU = {
+  uMap: { value: null }, uHasMap: { value: false },
+  uProj: { value: 0 }, uFov: { value: Math.PI }, uAspect: { value: 1 },
+  uMatte: { value: 0 }, uKeyCC: { value: new THREE.Vector2() }, uTol: { value: 0.15 }, uSoft: { value: 0.08 }, uSpill: { value: 0.12 },
+  uMaskLo: { value: 0.1 }, uMaskHi: { value: 0.96 },
+};
 const content = new THREE.Group();
 scene.add(content);
+const bgMesh = new THREE.Mesh(new THREE.SphereGeometry(30, 48, 24), new THREE.ShaderMaterial({
+  uniforms: bgU, vertexShader: VS, fragmentShader: BG_FS, side: THREE.BackSide, depthWrite: false, depthTest: false,
+}));
+bgMesh.renderOrder = -20; bgMesh.frustumCulled = false; content.add(bgMesh);
+const makeEyeMat = () => new THREE.ShaderMaterial({
+  uniforms: { ...vidU, uEye: { value: new THREE.Vector4(0, 0, 1, 1) } },
+  vertexShader: VS, fragmentShader: VIDEO_FS, side: THREE.BackSide, transparent: true, depthWrite: false, depthTest: false,
+});
 const sphereGeo = new THREE.SphereGeometry(20, 64, 32);
 const matL = makeEyeMat(), matR = makeEyeMat();
 const meshL = new THREE.Mesh(sphereGeo, matL), meshR = new THREE.Mesh(sphereGeo, matR);
@@ -644,8 +716,131 @@ bgs.push({ id: 'none', name: 'None', kind: 'builtin', tex: null, aspect: 2, avg:
 addBuiltinBg('dusk', 'Dusk ridge', makeDusk);
 addBuiltinBg('studio', 'Grey studio', makeStudio);
 
+/* ---------- pictures hung around you ---------- */
+const FLAT_VS = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
+const WALL_FS = `precision highp float; uniform sampler2D uTex; uniform float uDim; varying vec2 vUv;
+void main(){ gl_FragColor = vec4(texture2D(uTex, vUv).rgb * uDim, 1.0); }`;
+const SOLID_FS = `precision highp float; uniform vec3 uColor; void main(){ gl_FragColor = vec4(uColor, 1.0); }`;
+const FRAME_RGB = [0.07, 0.08, 0.1], FRAME_HI = [57 / 255, 196 / 255, 124 / 255];
+const wallDim = { value: 1 };
+const planeGeo = new THREE.PlaneGeometry(1, 1);
+const wallGroup = new THREE.Group(); content.add(wallGroup);
+let walls = (store.get('walls', []) || []).filter(w => w && w.id && w.pic);
+const wallObjs = new Map();
+const WALL_FIELDS = [
+  { k: 'yaw', label: 'Direction', min: -180, max: 180, step: 1, fmt: v => Math.round(v) + '°' },
+  { k: 'pitch', label: 'Height', min: -80, max: 80, step: 1, fmt: v => Math.round(v) + '°' },
+  { k: 'dist', label: 'Distance', min: 0.8, max: 15, step: 0.1, fmt: v => v.toFixed(1) + ' m' },
+  { k: 'size', label: 'Size', min: 0.2, max: 8, step: 0.05, fmt: v => v.toFixed(1) + ' m' },
+];
+function wallDir(yawDeg, pitchDeg) {
+  const t = yawDeg * Math.PI / 180, p = pitchDeg * Math.PI / 180;
+  return new THREE.Vector3(-Math.sin(t) * Math.cos(p), Math.sin(p), -Math.cos(t) * Math.cos(p));
+}
+function placeWallObj(w, o) {
+  const b = bgById(w.pic), aspect = b ? b.aspect : 1.5, h = w.size / aspect;
+  o.group.position.copy(wallDir(w.yaw, w.pitch)).multiplyScalar(w.dist);
+  o.group.rotation.set(w.pitch * Math.PI / 180, w.yaw * Math.PI / 180, 0, 'YXZ');
+  o.pic.scale.set(w.size, h, 1);
+  const border = Math.max(0.02, w.size * 0.025);
+  o.frame.scale.set(w.size + border * 2, h + border * 2, 1);
+}
+function syncWallObjs() {
+  for (const [id, o] of wallObjs) {
+    const w = walls.find(x => x.id === id);
+    if (!w || !bgById(w.pic) || o.picId !== w.pic) { wallGroup.remove(o.group); o.picMat.dispose(); o.frameMat.dispose(); wallObjs.delete(id); }
+  }
+  for (const w of walls) {
+    const b = bgById(w.pic); if (!b || !b.tex) continue;
+    let o = wallObjs.get(w.id);
+    if (!o) {
+      const picMat = new THREE.ShaderMaterial({ uniforms: { uTex: { value: b.tex }, uDim: wallDim }, vertexShader: FLAT_VS, fragmentShader: WALL_FS });
+      const frameMat = new THREE.ShaderMaterial({ uniforms: { uColor: { value: new THREE.Vector3(...FRAME_RGB) } }, vertexShader: FLAT_VS, fragmentShader: SOLID_FS });
+      const pic = new THREE.Mesh(planeGeo, picMat), frame = new THREE.Mesh(planeGeo, frameMat);
+      frame.position.z = -0.01; frame.renderOrder = -15; pic.renderOrder = -14;
+      pic.userData.wallId = w.id;
+      const group = new THREE.Group(); group.add(frame, pic); wallGroup.add(group);
+      o = { group, pic, frame, picMat, frameMat, picId: w.pic, hi: false };
+      wallObjs.set(w.id, o);
+    }
+    placeWallObj(w, o);
+  }
+}
+const wallPicMeshes = () => [...wallObjs.values()].map(o => o.pic);
+function setWallHighlight(ids) {
+  for (const [id, o] of wallObjs) {
+    const on = ids.has(id);
+    if (on !== o.hi) { o.hi = on; o.frameMat.uniforms.uColor.value.set(...(on ? FRAME_HI : FRAME_RGB)); }
+  }
+}
+const saveWalls = () => store.set('walls', walls);
+const hangable = () => bgs.filter(b => b.tex);
+function addWall(picId, yawDeg, pitchDeg) {
+  if (walls.length >= MAX_WALLS) { toast('You can hang up to ' + MAX_WALLS + ' pictures. Take one down first.'); return null; }
+  const b = bgById(picId); if (!b || !b.tex) return null;
+  const pitch = Math.round(clamp(pitchDeg, -30, 45));
+  let yaw = Math.round(normDeg(yawDeg));
+  for (const off of [0, 30, -30, 60, -60, 90, -90, 120, -120, 150, -150, 180]) {
+    const y = Math.round(normDeg(yawDeg + off));
+    if (!walls.some(w => Math.abs(normDeg(w.yaw - y)) < 24 && Math.abs(w.pitch - pitch) < 22)) { yaw = y; break; }
+  }
+  const w = { id: 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), pic: picId, yaw, pitch, dist: 3, size: b.aspect >= 1.9 ? 2.6 : 1.4 };
+  walls.push(w); saveWalls(); syncWallObjs(); renderWallList(); panelDirty = true;
+  return w;
+}
+function updateWall(id, patch, opts = {}) {
+  const w = walls.find(x => x.id === id); if (!w) return;
+  Object.assign(w, patch);
+  const o = wallObjs.get(id); if (o) placeWallObj(w, o);
+  if (!opts.noSave) saveWalls();
+  if (!opts.noUi) syncWallInputs(w);
+}
+function removeWall(id) { walls = walls.filter(w => w.id !== id); saveWalls(); syncWallObjs(); renderWallList(); panelDirty = true; }
+function removeAllWalls() { if (!walls.length) return; walls = []; saveWalls(); syncWallObjs(); renderWallList(); panelDirty = true; toast('All pictures taken down.'); }
+function renderWallPick() {
+  const sel = $('wallPick'), prev = sel.value, list = hangable();
+  sel.textContent = '';
+  for (const b of list) { const o = document.createElement('option'); o.value = b.id; o.textContent = b.name; sel.appendChild(o); }
+  if (list.some(b => b.id === prev)) sel.value = prev;
+  else { const mine = list.filter(b => b.kind !== 'builtin'); if (mine.length) sel.value = mine[mine.length - 1].id; }
+  $('wallAdd').disabled = !list.length;
+  if (vrPick >= list.length) vrPick = Math.max(0, list.length - 1);
+}
+function renderWallList() {
+  const ul = $('wallList'); ul.textContent = '';
+  if (!walls.length) { const li = document.createElement('li'); li.className = 'walls-empty'; li.textContent = 'No pictures hung yet.'; ul.appendChild(li); return; }
+  for (const w of walls) {
+    const b = bgById(w.pic), name = b ? b.name : 'Loading picture…';
+    const li = document.createElement('li'); li.className = 'wall';
+    const head = document.createElement('div'); head.className = 'whead';
+    const img = document.createElement(b && b.thumb ? 'img' : 'span'); img.className = 'wthumb';
+    if (b && b.thumb) { img.src = b.thumb; img.alt = ''; }
+    const nm = document.createElement('span'); nm.className = 'wname'; nm.textContent = name; nm.title = name;
+    const x = document.createElement('button'); x.className = 'x'; x.type = 'button'; x.textContent = '×'; x.setAttribute('aria-label', 'Take down ' + name);
+    x.addEventListener('click', () => removeWall(w.id));
+    head.append(img, nm, x); li.appendChild(head);
+    for (const f of WALL_FIELDS) {
+      const row = document.createElement('div'); row.className = 'row';
+      const id = 'w-' + w.id + '-' + f.k;
+      const lab = document.createElement('label'); lab.htmlFor = id; lab.textContent = f.label;
+      const inp = document.createElement('input'); inp.type = 'range'; inp.id = id; inp.min = f.min; inp.max = f.max; inp.step = f.step; inp.value = w[f.k];
+      const out = document.createElement('output'); out.id = id + '-v'; out.textContent = f.fmt(w[f.k]);
+      inp.addEventListener('input', () => { updateWall(w.id, { [f.k]: +inp.value }, { noUi: true }); out.textContent = f.fmt(+inp.value); });
+      row.append(lab, inp, out); li.appendChild(row);
+    }
+    ul.appendChild(li);
+  }
+}
+function syncWallInputs(w) {
+  for (const f of WALL_FIELDS) {
+    const i = $('w-' + w.id + '-' + f.k), o = $('w-' + w.id + '-' + f.k + '-v');
+    if (i) i.value = w[f.k]; if (o) o.textContent = f.fmt(w[f.k]);
+  }
+}
+let vrPick = 0;
+
 /* ---------- library ---------- */
-const videos = [{ id: 'demo', demo: true, name: 'Demo clip (green screen)', key: 'demo', size: 0, detected: { keyOn: true, keyColor: [0.2, 0.68, 0.34], tol: 0.12, soft: 0.07, spill: 0.14 }, hints: { proj: true, stereo: true }, source: demo }];
+const videos = [{ id: 'demo', demo: true, name: 'Demo clip (green screen)', key: 'demo', size: 0, detected: { matte: 'color', keyColor: [0.2, 0.68, 0.34], tol: 0.12, soft: 0.07, spill: 0.14 }, hints: { proj: true, stereo: true }, source: demo }];
 let current = null;
 
 function detectFromName(name) {
@@ -660,9 +855,10 @@ function detectFromName(name) {
   else if (/(^|[^0-9])360([^0-9p]|$)/.test(n)) r.proj = '360';
   else if (/(^|[^0-9])180([^0-9p]|$)/.test(n)) r.proj = '180';
   if (r.proj) hints.proj = true;
-  if (/passthrough|pass_through|greenscreen|green_screen|chroma/.test(n) || w('pt')) r.keyOn = true;
-  const alpha = w('alpha');
-  return { r, hints, alpha };
+  if (/greenscreen|green_screen|chroma/.test(n)) r.matte = 'color';
+  // Passthrough files usually carry a packed mask; some use a colored screen instead. Decided from the frame once it loads.
+  const pass = /passthrough|pass_through|alpha/.test(n) || w('pt|ar');
+  return { r, hints, pass };
 }
 function guessFromShape(w, h, hints, proj) {
   const a = w / h, g = {};
@@ -679,8 +875,8 @@ function addFiles(files) {
   for (const f of files) {
     const key = f.name + '|' + f.size;
     if (videos.some(v => v.key === key)) continue;
-    const { r, hints, alpha } = detectFromName(f.name);
-    videos.push({ id: 'v' + Math.random().toString(36).slice(2, 9), name: f.name, size: f.size, key, file: f, detected: r, hints, alpha, source: null, saved: store.get('v:' + key, null) });
+    const { r, hints, pass } = detectFromName(f.name);
+    videos.push({ id: 'v' + Math.random().toString(36).slice(2, 9), name: f.name, size: f.size, key, file: f, detected: r, hints, pass, source: null });
     if (first < 0) first = videos.length - 1;
   }
   renderVideoList();
@@ -695,7 +891,10 @@ async function selectVideo(i, autoplay) {
   }
   current = item;
   if (!item.source) item.source = new VideoSource(item.file);
-  const saved = store.get('v:' + item.key, null);
+  stopMaskWatch();
+  const raw = store.get('v:' + item.key, null);
+  // Passthrough files set up by the older version (before the mask mode existed) get checked again.
+  const saved = raw && raw.matte === undefined && item.pass ? null : migrateVideo(raw);
   Object.assign(S, DEFAULT_VIDEO, item.detected || {}, saved || {});
   S.keyColor = (S.keyColor || DEFAULT_VIDEO.keyColor).slice();
   apply(); syncControls(); renderVideoList(); panelDirty = true;
@@ -707,10 +906,13 @@ async function selectVideo(i, autoplay) {
   if (current !== item) return;
   if (!saved) {
     Object.assign(S, guessFromShape(item.source.width, item.source.height, item.hints || {}, S.proj));
-    if (item.detected && item.detected.keyOn && !item.demo) autoKey(true);
+    // Passthrough videos are nearly always side-by-side fisheye; confirmed (or undone) by the mask check.
+    const ar = item.source.width / item.source.height;
+    if (item.pass && ar > 1.9 && ar < 2.1 && !(item.hints && item.hints.proj)) { S.proj = 'fish190'; S.stereo = 'sbs'; }
+    if (S.matte === 'color' && !item.demo) autoKey(true);
     saveVideoSettings();
+    if (item.pass) startMaskWatch(item);
   }
-  if (item.alpha) toast('This file looks alpha-packed (_ALPHA). If it shows a mask beside the picture, use the green-screen version of the video instead.', 6000);
   apply(); syncControls(); renderVideoList(); panelDirty = true;
   if (autoplay) item.source.play().catch(() => { });
 }
@@ -731,14 +933,14 @@ function setS(patch) {
   if (VIDEO_KEYS.some(k => k in patch)) saveVideoSettings();
   if (BG_KEYS.some(k => k in patch)) saveBgSettings();
   apply(); syncControls(); panelDirty = true;
-  if ('proj' in patch || 'stereo' in patch || 'keyOn' in patch) renderVideoList();
+  if ('proj' in patch || 'stereo' in patch || 'matte' in patch) renderVideoList();
   if ('bgId' in patch) renderBgGrid();
 }
 
 /* ---------- apply state to the shader ---------- */
 function resolvedBgMode(bg) { return S.bgMode === 'auto' ? (bg && bg.aspect >= 1.9 ? 'pano' : 'wall') : S.bgMode; }
 function apply() {
-  const u = shared, src = current && current.source;
+  const u = vidU, src = current && current.source;
   u.uHasMap.value = !!(src && src.ready);
   u.uMap.value = src ? src.tex : null;
   u.uProj.value = S.proj === '180' ? 0 : S.proj === '360' ? 1 : S.proj === 'flat' ? 3 : 2;
@@ -750,18 +952,21 @@ function apply() {
   matL.uniforms.uEye.value.set(...L); matR.uniforms.uEye.value.set(...R);
   const w = src ? src.width : 2, h = src ? src.height : 1;
   u.uAspect.value = (w * L[2]) / (h * L[3]);
-  u.uKeyOn.value = !!S.keyOn;
+  u.uMatte.value = S.matte === 'color' ? 1 : S.matte === 'packed' ? 2 : 0;
   u.uKeyCC.value.set(...cbcr(S.keyColor));
   u.uTol.value = S.tol; u.uSoft.value = Math.max(0.005, S.soft); u.uSpill.value = Math.max(0.005, S.spill);
-  const bg = bgById(S.bgId) || bgById('none');
-  u.uHasBg.value = !!bg.tex; u.uBg.value = bg.tex;
+  const lo = 0.04 + S.maskCut;
+  u.uMaskLo.value = lo; u.uMaskHi.value = Math.max(lo + 0.05, 0.96);
+  const bg = bgById(S.bgId) || bgById('none'), b = bgU;
+  b.uHasBg.value = !!bg.tex; b.uBg.value = bg.tex;
   const mode = resolvedBgMode(bg);
-  u.uBgMode.value = mode === 'pano' ? 0 : mode === 'wall' ? 1 : 2;
-  u.uBgAspect.value = bg.aspect;
+  b.uBgMode.value = mode === 'pano' ? 0 : mode === 'wall' ? 1 : 2;
+  b.uBgAspect.value = bg.aspect;
   const f = bg.tex ? 0.45 * S.bgDim : 1;
-  u.uBgFill.value.set(bg.avg[0] * f, bg.avg[1] * f, bg.avg[2] * f);
-  u.uBgYaw.value = S.bgYaw * Math.PI / 180; u.uBgPitch.value = S.bgHeight * Math.PI / 180;
-  u.uBgDim.value = S.bgDim; u.uBgFov.value = S.bgSize * Math.PI / 180;
+  b.uBgFill.value.set(bg.avg[0] * f, bg.avg[1] * f, bg.avg[2] * f);
+  b.uBgYaw.value = S.bgYaw * Math.PI / 180; b.uBgPitch.value = S.bgHeight * Math.PI / 180;
+  b.uBgDim.value = S.bgDim; b.uBgFov.value = S.bgSize * Math.PI / 180;
+  wallDim.value = S.bgDim;
   updateSpec();
 }
 
@@ -799,8 +1004,81 @@ function autoKey(silent) {
   const kc = cbcr(key);
   const dists = sel.map(p => { const q = cbcr(p); return Math.hypot(q[0] - kc[0], q[1] - kc[1]); }).sort((a, b) => a - b);
   const p95 = dists[Math.floor(dists.length * 0.95)] || 0.08;
-  setS({ keyOn: true, keyColor: key, tol: clamp(p95 + 0.03, 0.06, 0.35) });
+  setS({ matte: 'color', keyColor: key, tol: clamp(p95 + 0.03, 0.06, 0.35) });
   if (!silent) toast('Screen color set. Fine-tune with Tolerance if edges look off.');
+  return true;
+}
+
+/* ---------- passthrough mask detection ---------- */
+// Looks at the six corner areas where a packed mask lives. 'yes' = mask pixels on black,
+// 'no' = ordinary picture content there, 'unsure' = only black (no one in shot, or no mask).
+const PACK_REGIONS = [[0.4, 0.8, 0.6, 1], [0.4, 0, 0.6, 0.2], [0.9, 0.8, 1, 1], [0.9, 0, 1, 0.2], [0, 0.8, 0.1, 1], [0, 0, 0.1, 0.2]];
+let detectCanvas = null;
+function detectPacked() {
+  const src = current && current.source;
+  if (!src || !src.ready) return 'unsure';
+  const ar = src.width / src.height;
+  if (ar < 1.9 || ar > 2.1) return 'no';
+  const W = 320, H = 160;
+  if (!detectCanvas) { detectCanvas = document.createElement('canvas'); detectCanvas.width = W; detectCanvas.height = H; }
+  const g = detectCanvas.getContext('2d', { willReadFrequently: true });
+  let d;
+  try { g.drawImage(src.frameSource, 0, 0, W, H); d = g.getImageData(0, 0, W, H).data; } catch (e) { return 'unsure'; }
+  let mask = 0, dark = 0, other = 0;
+  for (const [x0, y0, x1, y1] of PACK_REGIONS) {
+    for (let y = Math.floor(y0 * H); y < Math.ceil(y1 * H); y++) for (let x = Math.floor(x0 * W); x < Math.ceil(x1 * W); x++) {
+      const fx = (x + 0.5) / W, fy = (y + 0.5) / H;
+      const ex = fx < 0.5 ? fx * 2 : fx * 2 - 1;           // position inside that eye's square
+      if ((ex - 0.5) ** 2 + (fy - 0.5) ** 2 < 0.235) continue; // skip the fisheye picture itself
+      const i = (y * W + x) * 4, r = d[i] / 255, gg = d[i + 1] / 255, b = d[i + 2] / 255, mx = Math.max(r, gg, b);
+      if (mx < 0.1) dark++;
+      else if ((r > 0.3 && gg < 0.45 * r && b < 0.45 * r) || (r > 0.45 && Math.abs(r - gg) < 0.1 && Math.abs(r - b) < 0.1)) mask++;
+      else other++;
+    }
+  }
+  const total = mask + dark + other;
+  if (total < 100) return 'unsure';
+  if (mask > total * 0.015 && other < total * 0.08) return 'yes';
+  if (other > total * 0.25) return 'no';
+  return 'unsure';
+}
+let maskWatch = null;
+function startMaskWatch(item) { maskWatch = { item, checks: 0, lastT: -1, lastAt: 0 }; syncControls(); }
+function stopMaskWatch() { if (maskWatch) { maskWatch = null; syncControls(); } }
+function usePackedMask(silent) {
+  const patch = { matte: 'packed' };
+  if (S.stereo !== 'sbs') patch.stereo = 'sbs';
+  const fixProj = !S.proj.startsWith('fish');
+  if (fixProj) patch.proj = 'fish190';
+  setS(patch);
+  if (!silent) toast(fixProj ? 'Passthrough mask found. Switched to fisheye 190°; if people look too big or small, try fisheye 200°.' : 'Passthrough mask found. The see-through area now shows your backdrop and pictures.', 6000);
+}
+function tickMaskWatch(now) {
+  const w = maskWatch, src = current && current.source;
+  if (!w || w.item !== current || !src || !src.ready || now - w.lastAt < 1200) return;
+  w.lastAt = now;
+  if (src.time === w.lastT) return;          // only count new frames
+  w.lastT = src.time; w.checks++;
+  const r = detectPacked();
+  if (r === 'yes') { maskWatch = null; usePackedMask(false); return; }
+  if (r === 'no') {
+    // Real picture content in the corners: not a packed fisheye video.
+    maskWatch = null;
+    if (!(w.item.hints && w.item.hints.proj) && S.proj === 'fish190') setS({ proj: '180' });
+    if (!autoKey(true)) syncControls();
+    return;
+  }
+  if (w.checks === 8 && autoKey(true)) { maskWatch = null; return; }   // a colored screen instead of a mask
+  if (w.checks >= 40) { maskWatch = null; syncControls(); toast('No passthrough mask found in this video. If it has a colored screen, try Screen color.', 6000); }
+}
+function autoDetect() {
+  stopMaskWatch();
+  const r = detectPacked();
+  if (r === 'yes') { usePackedMask(false); return; }
+  if (!autoKey(true)) {
+    if (r === 'unsure' && current && current.pass) { startMaskWatch(current); toast('Looking for a passthrough mask. It shows up once someone is in the shot.'); }
+    else toast('No passthrough mask or screen color found. Pick a mode yourself.');
+  } else toast('Screen color set. Fine-tune with Tolerance if edges look off.');
 }
 
 /* ---------- 2D UI ---------- */
@@ -808,8 +1086,14 @@ function syncControls() {
   $('proj').value = S.proj; $('stereo').value = S.stereo; $('swap').checked = !!S.swap;
   $('flatFov').value = S.flatFov; $('flatFovV').textContent = Math.round(S.flatFov) + '°';
   $('flatRow').hidden = S.proj !== 'flat';
-  $('keyOn').checked = !!S.keyOn; $('keyColor').value = toHex(S.keyColor);
+  for (const r of document.querySelectorAll('input[name=matte]')) r.checked = r.value === S.matte;
+  const looking = maskWatch && maskWatch.item === current && S.matte !== 'packed';
+  $('matteHint').textContent = looking ? 'Looking for a passthrough mask in this video. It shows up once someone is in the shot.' : MATTE_HINT[S.matte];
+  $('colorTools').hidden = S.matte !== 'color'; $('colorRows').hidden = S.matte !== 'color';
+  $('maskRows').hidden = S.matte !== 'packed'; $('offNote').hidden = S.matte !== 'off';
+  $('keyColor').value = toHex(S.keyColor);
   for (const k of ['tol', 'soft', 'spill']) { $(k).value = S[k]; $(k + 'V').textContent = S[k].toFixed(2); }
+  $('maskCut').value = S.maskCut; $('maskCutV').textContent = Math.round(S.maskCut * 100) + '%';
   $('bgMode').value = S.bgMode;
   $('bgYaw').value = S.bgYaw; $('bgYawV').textContent = Math.round(S.bgYaw) + '°';
   $('bgHeight').value = S.bgHeight; $('bgHeightV').textContent = Math.round(S.bgHeight) + '°';
@@ -823,7 +1107,8 @@ function updateSpec() {
   const parts = [];
   if (src && src.ready) parts.push(src.width + '×' + src.height);
   parts.push(PROJ[S.proj], STEREO[S.stereo]);
-  if (S.keyOn) parts.push('keyed ' + toHex(S.keyColor));
+  if (S.matte === 'color') parts.push('screen color ' + toHex(S.keyColor));
+  else if (S.matte === 'packed') parts.push('passthrough mask');
   $('spec').textContent = parts.join(' · ');
 }
 function syncPlayButton() { const src = current && current.source; $('playBtn').textContent = src && !src.paused ? 'Pause' : 'Play'; }
@@ -842,11 +1127,12 @@ function renderVideoList() {
     const box = document.createElement('div'); box.style.minWidth = '0';
     const nm = document.createElement('div'); nm.className = 'vname'; nm.textContent = v.name; nm.title = v.name;
     const meta = document.createElement('div'); meta.className = 'vmeta';
-    const st = v === current ? S : { ...DEFAULT_VIDEO, ...(v.detected || {}), ...(store.get('v:' + v.key, null) || {}) };
+    const st = v === current ? S : { ...DEFAULT_VIDEO, ...(v.detected || {}), ...(migrateVideo(store.get('v:' + v.key, null)) || {}) };
     const chip = (txt, cls) => { const s = document.createElement('span'); s.className = 'chip' + (cls ? ' ' + cls : ''); s.textContent = txt; meta.appendChild(s); };
     chip(PROJ[st.proj] + ' · ' + STEREO_SHORT[st.stereo]);
-    if (st.keyOn) chip('keyed', 'key');
-    if (v.alpha) chip('alpha-packed', 'warn');
+    if (st.matte === 'color') chip('screen color', 'key');
+    else if (st.matte === 'packed') chip('passthrough mask', 'key');
+    else if (v.pass && maskWatch && maskWatch.item === v) chip('checking for mask…');
     if (v.size) chip(v.size >= 1073741824 ? (v.size / 1073741824).toFixed(1) + ' GB' : v.size >= 1048576 ? Math.round(v.size / 1048576) + ' MB' : Math.max(1, Math.round(v.size / 1024)) + ' KB');
     box.append(nm, meta); li.appendChild(box);
     if (!v.demo) {
@@ -888,6 +1174,8 @@ async function removeBg(b) {
   const i = bgs.indexOf(b); if (i < 0) return;
   bgs.splice(i, 1); if (b.tex) b.tex.dispose(); if (b.url) URL.revokeObjectURL(b.url);
   await idb.del(b.id);
+  if (walls.some(w => w.pic === b.id)) { walls = walls.filter(w => w.pic !== b.id); saveWalls(); syncWallObjs(); renderWallList(); }
+  renderWallPick();
   if (S.bgId === b.id) setS({ bgId: 'dusk' }); else renderBgGrid();
 }
 async function addImages(files) {
@@ -901,8 +1189,14 @@ async function addImages(files) {
         : 'Couldn’t open ' + f.name + '. Save it as JPG or PNG and add it again.', 6000);
     }
   }
-  if (last) { setS({ bgId: last.id }); toast(added === 1 ? 'Backdrop added: ' + last.name : added + ' backdrops added'); }
-  else renderBgGrid();
+  renderWallPick();
+  if (last) {
+    $('wallPick').value = last.id;
+    // Only take over the backdrop while it's still one of the built-in ones.
+    const cur = bgById(S.bgId);
+    if (!cur || cur.kind === 'builtin') setS({ bgId: last.id }); else renderBgGrid();
+    toast(added === 1 ? 'Picture added: ' + last.name : added + ' pictures added');
+  } else renderBgGrid();
 }
 function addAny(files) {
   const imgs = files.filter(isImageFile), vids = files.filter(f => !isImageFile(f));
@@ -921,12 +1215,17 @@ $('proj').addEventListener('change', (e) => setS({ proj: e.target.value }));
 $('stereo').addEventListener('change', (e) => setS({ stereo: e.target.value }));
 $('swap').addEventListener('change', (e) => setS({ swap: e.target.checked }));
 $('flatFov').addEventListener('input', (e) => setS({ flatFov: +e.target.value }));
-$('keyOn').addEventListener('change', (e) => { setS({ keyOn: e.target.checked }); });
-$('keyColor').addEventListener('input', (e) => setS({ keyColor: fromHex(e.target.value), keyOn: true }));
-$('autoKey').addEventListener('click', () => autoKey(false));
-$('keyGreen').addEventListener('click', () => setS({ keyColor: KEY_PRESETS.green.slice(), keyOn: true }));
-$('keyBlue').addEventListener('click', () => setS({ keyColor: KEY_PRESETS.blue.slice(), keyOn: true }));
-for (const k of ['tol', 'soft', 'spill', 'bgYaw', 'bgHeight', 'bgDim', 'bgSize']) $(k).addEventListener('input', (e) => setS({ [k]: +e.target.value }));
+for (const r of document.querySelectorAll('input[name=matte]')) r.addEventListener('change', () => { if (r.checked) { stopMaskWatch(); setS({ matte: r.value }); } });
+$('keyColor').addEventListener('input', (e) => setS({ keyColor: fromHex(e.target.value), matte: 'color' }));
+$('autoKey').addEventListener('click', autoDetect);
+$('keyGreen').addEventListener('click', () => setS({ keyColor: KEY_PRESETS.green.slice(), matte: 'color' }));
+$('keyBlue').addEventListener('click', () => setS({ keyColor: KEY_PRESETS.blue.slice(), matte: 'color' }));
+for (const k of ['tol', 'soft', 'spill', 'maskCut', 'bgYaw', 'bgHeight', 'bgDim', 'bgSize']) $(k).addEventListener('input', (e) => setS({ [k]: +e.target.value }));
+$('wallAdd').addEventListener('click', () => {
+  const id = $('wallPick').value; if (!id) return;
+  const w = addWall(id, view.yaw * 180 / Math.PI, view.pitch * 180 / Math.PI);
+  if (w) toast('Hung ' + (bgById(id) || {}).name + '. Adjust it below, or move it with the controller in VR.');
+});
 $('bgMode').addEventListener('change', (e) => setS({ bgMode: e.target.value }));
 
 function togglePlay() { const s = current && current.source; if (!s) return; if (s.paused) s.play().catch(() => toast('Press play again to start the video.')); else s.pause(); syncPlayButton(); panelDirty = true; }
@@ -965,7 +1264,7 @@ function resize() {
 new ResizeObserver(resize).observe($('screen'));
 
 /* ---------- VR menu (drawn on a canvas) ---------- */
-const PW = 1200, PH = 840;
+const PW = 1200, PH = 1060;
 const pcanvas = document.createElement('canvas'); pcanvas.width = PW; pcanvas.height = PH;
 const pg = pcanvas.getContext('2d');
 const ptex = new THREE.CanvasTexture(pcanvas); ptex.colorSpace = THREE.SRGBColorSpace; ptex.anisotropy = Math.min(4, maxAniso);
@@ -974,66 +1273,110 @@ panel.renderOrder = 10; panel.visible = false; scene.add(panel);
 const css = getComputedStyle(document.documentElement);
 const C = { fg: css.getPropertyValue('--fg').trim(), muted: css.getPropertyValue('--muted').trim(), key: css.getPropertyValue('--key').trim(), keyHi: css.getPropertyValue('--key-hi').trim(), keyInk: css.getPropertyValue('--key-ink').trim() };
 const FONT = '"Figtree","Segoe UI",system-ui,sans-serif', MONO = '"IBM Plex Mono",ui-monospace,monospace';
-let panelDirty = true, pItems = [], menuOpen = false;
+let panelDirty = true, pItems = [], menuOpen = false, panelUsedH = PH;
+const MENU_SLIDERS = {
+  tol: ['Tolerance', 0.02, 0.45, v => v.toFixed(2)],
+  soft: ['Edge softness', 0.01, 0.3, v => v.toFixed(2)],
+  spill: ['Spill removal', 0.01, 0.6, v => v.toFixed(2)],
+  maskCut: ['Tighten edges', 0, 0.6, v => Math.round(v * 100) + '%'],
+  bgDim: ['Backdrop & picture brightness', 0.15, 1.3, v => Math.round(v * 100) + '%'],
+  bgYaw: ['Rotate backdrop', -180, 180, v => Math.round(v) + '°'],
+  bgHeight: ['Backdrop height', -40, 40, v => Math.round(v) + '°'],
+};
 
 function panelItems() {
   const it = [], src = current && current.source;
   const B = (id, x, y, w, h, label, act, o = {}) => it.push({ type: 'btn', id, x, y, w, h, label, act, ...o });
-  const Sl = (id, x, y, label, min, max, key, fmt) => it.push({ type: 'slider', id, x, y, w: 544, h: 58, label, min, max, key, fmt });
+  const Hd = (label, y) => it.push({ type: 'heading', id: 'h-' + label, x: 42, y, label });
   it.push({ type: 'seek', id: 'seek', x: 40, y: 98, w: 1120, h: 52 });
   B('prev', 40, 166, 180, 80, '◀◀  Prev', () => stepVideo(-1));
   B('b30', 236, 166, 180, 80, '−30 s', () => seekBy(-30));
   B('play', 432, 166, 336, 80, src && !src.paused ? 'Pause' : 'Play', togglePlay, { accent: true, fs: 34 });
   B('f30', 784, 166, 180, 80, '+30 s', () => seekBy(30));
   B('next', 980, 166, 180, 80, 'Next  ▶▶', () => stepVideo(1));
-  B('keyOn', 40, 292, 270, 60, S.keyOn ? 'Replace: On' : 'Replace: Off', () => setS({ keyOn: !S.keyOn }), { active: S.keyOn, swatch: S.keyOn ? toHex(S.keyColor) : null });
-  B('auto', 326, 292, 200, 60, 'Auto key', () => autoKey(false));
-  B('green', 542, 292, 140, 60, 'Green', () => setS({ keyColor: KEY_PRESETS.green.slice(), keyOn: true }));
-  B('blue', 698, 292, 140, 60, 'Blue', () => setS({ keyColor: KEY_PRESETS.blue.slice(), keyOn: true }));
-  B('bgmode', 854, 292, 306, 60, 'Placement: ' + BGMODE[S.bgMode], () => setS({ bgMode: BGMODE_ORDER[(BGMODE_ORDER.indexOf(S.bgMode) + 1) % BGMODE_ORDER.length] }));
-  Sl('tol', 40, 368, 'Tolerance', 0.02, 0.45, 'tol', v => v.toFixed(2));
-  Sl('soft', 616, 368, 'Edge softness', 0.01, 0.3, 'soft', v => v.toFixed(2));
-  Sl('spill', 40, 432, 'Spill removal', 0.01, 0.6, 'spill', v => v.toFixed(2));
-  Sl('dim', 616, 432, 'Backdrop brightness', 0.15, 1.3, 'bgDim', v => Math.round(v * 100) + '%');
-  Sl('yaw', 40, 496, 'Rotate backdrop', -180, 180, 'bgYaw', v => Math.round(v) + '°');
-  Sl('height', 616, 496, 'Backdrop height', -40, 40, 'bgHeight', v => Math.round(v) + '°');
+
+  let y = 280;
+  Hd('BACKGROUND', y); y += 18;
+  B('matte', 40, y, 304, 60, S.matte === 'off' ? 'Replace: Off' : MATTE[S.matte],
+    () => { stopMaskWatch(); setS({ matte: MATTE_ORDER[(MATTE_ORDER.indexOf(S.matte) + 1) % MATTE_ORDER.length] }); },
+    { active: S.matte !== 'off', swatch: S.matte === 'color' ? toHex(S.keyColor) : null, fs: 25 });
+  B('auto', 360, y, 220, 60, 'Auto-detect', autoDetect, { fs: 25 });
+  B('green', 596, y, 120, 60, 'Green', () => { stopMaskWatch(); setS({ keyColor: KEY_PRESETS.green.slice(), matte: 'color' }); }, { fs: 25 });
+  B('blue', 732, y, 110, 60, 'Blue', () => { stopMaskWatch(); setS({ keyColor: KEY_PRESETS.blue.slice(), matte: 'color' }); }, { fs: 25 });
+  B('bgmode', 858, y, 302, 60, 'Placement: ' + BGMODE[S.bgMode], () => setS({ bgMode: BGMODE_ORDER[(BGMODE_ORDER.indexOf(S.bgMode) + 1) % BGMODE_ORDER.length] }), { fs: 24 });
+  y += 76;
+  const keys = S.matte === 'color' ? ['tol', 'soft', 'spill', 'bgDim', 'bgYaw', 'bgHeight'] : S.matte === 'packed' ? ['maskCut', 'bgDim', 'bgYaw', 'bgHeight'] : ['bgDim', 'bgYaw', 'bgHeight'];
+  keys.forEach((k, i) => {
+    const [label, min, max, fmt] = MENU_SLIDERS[k];
+    it.push({ type: 'slider', id: 's-' + k, x: i % 2 ? 616 : 40, y: y + Math.floor(i / 2) * 64, w: 544, h: 58, label, min, max, key: k, fmt });
+  });
+  y += Math.ceil(keys.length / 2) * 64 + 8;
   const bi = Math.max(0, bgs.findIndex(b => b.id === S.bgId));
-  B('bgprev', 40, 568, 110, 60, '◀', () => setS({ bgId: bgs[(bi - 1 + bgs.length) % bgs.length].id }), { fs: 30 });
-  it.push({ type: 'label', id: 'bgname', x: 166, y: 568, w: 868, h: 60, label: 'Backdrop: ' + (bgs[bi] ? bgs[bi].name : 'None') + '   (' + (bi + 1) + ' / ' + bgs.length + ')' });
-  B('bgnext', 1050, 568, 110, 60, '▶', () => setS({ bgId: bgs[(bi + 1) % bgs.length].id }), { fs: 30 });
-  B('proj', 40, 668, 320, 60, PROJ[S.proj], () => setS({ proj: PROJ_ORDER[(PROJ_ORDER.indexOf(S.proj) + 1) % PROJ_ORDER.length] }));
-  B('stereo', 376, 668, 320, 60, STEREO[S.stereo], () => setS({ stereo: STEREO_ORDER[(STEREO_ORDER.indexOf(S.stereo) + 1) % STEREO_ORDER.length] }));
-  B('swap', 712, 668, 220, 60, 'Swap eyes', () => setS({ swap: !S.swap }), { active: S.swap });
-  B('recenter', 948, 668, 212, 60, 'Recenter', recenter);
-  B('hide', 40, 744, 552, 60, 'Hide menu', () => setMenu(false));
-  B('exit', 608, 744, 552, 60, 'Exit VR', () => { const s = renderer.xr.getSession(); if (s) s.end(); });
+  B('bgprev', 40, y, 110, 60, '◀', () => setS({ bgId: bgs[(bi - 1 + bgs.length) % bgs.length].id }), { fs: 30 });
+  it.push({ type: 'label', id: 'bgname', x: 166, y, w: 868, h: 60, label: 'Backdrop: ' + (bgs[bi] ? bgs[bi].name : 'None') + '   (' + (bi + 1) + ' / ' + bgs.length + ')' });
+  B('bgnext', 1050, y, 110, 60, '▶', () => setS({ bgId: bgs[(bi + 1) % bgs.length].id }), { fs: 30 });
+  y += 94;
+
+  Hd('PICTURES AROUND YOU', y); y += 18;
+  const list = hangable();
+  vrPick = clamp(vrPick, 0, Math.max(0, list.length - 1));
+  const pic = list[vrPick];
+  B('pprev', 40, y, 90, 60, '◀', () => { if (list.length) { vrPick = (vrPick - 1 + list.length) % list.length; panelDirty = true; } }, { fs: 30 });
+  it.push({ type: 'label', id: 'pname', x: 146, y, w: 420, h: 60, label: pic ? pic.name + '   (' + (vrPick + 1) + ' / ' + list.length + ')' : 'Add pictures on the page first' });
+  B('pnext', 582, y, 90, 60, '▶', () => { if (list.length) { vrPick = (vrPick + 1) % list.length; panelDirty = true; } }, { fs: 30 });
+  B('hang', 688, y, 220, 60, 'Hang here', () => { if (pic) hangInFront(pic.id); }, { disabled: !pic || walls.length >= MAX_WALLS });
+  B('unhang', 924, y, 236, 60, 'Remove all', removeAllWalls, { disabled: !walls.length });
+  y += 94;
+
+  Hd('VIDEO FORMAT', y); y += 18;
+  B('proj', 40, y, 320, 60, PROJ[S.proj], () => setS({ proj: PROJ_ORDER[(PROJ_ORDER.indexOf(S.proj) + 1) % PROJ_ORDER.length] }));
+  B('stereo', 376, y, 320, 60, STEREO[S.stereo], () => setS({ stereo: STEREO_ORDER[(STEREO_ORDER.indexOf(S.stereo) + 1) % STEREO_ORDER.length] }));
+  B('swap', 712, y, 220, 60, 'Swap eyes', () => setS({ swap: !S.swap }), { active: S.swap });
+  B('recenter', 948, y, 212, 60, 'Recenter', recenter);
+  y += 76;
+  B('hide', 40, y, 552, 60, 'Hide menu', () => setMenu(false));
+  B('exit', 608, y, 552, 60, 'Exit VR', () => { const s = renderer.xr.getSession(); if (s) s.end(); });
+  y += 84;
+  it.push({ type: 'text', id: 'hint', x: 42, y, w: 1116, label: walls.length
+    ? 'To move a hung picture, point at it and hold the trigger. While holding: stick up/down changes distance, left/right changes size, A or X takes it down.'
+    : 'Hang a picture, then point at it and hold the trigger to move it around you.' });
+  panelUsedH = Math.min(PH, y + (walls.length ? 70 : 40));
   return it;
 }
 function rr(g, x, y, w, h, r) { g.beginPath(); g.roundRect(x, y, w, h, r); }
 function fitText(g, s, max) { if (g.measureText(s).width <= max) return s; while (s.length > 1 && g.measureText(s + '…').width > max) s = s.slice(0, -1); return s + '…'; }
+function wrapText(g, s, max) {
+  const out = []; let line = '';
+  for (const word of s.split(' ')) { const t = line ? line + ' ' + word : word; if (g.measureText(t).width > max && line) { out.push(line); line = word; } else line = t; }
+  if (line) out.push(line);
+  return out;
+}
 function drawPanel(hovered) {
   pItems = panelItems();
   const g = pg; g.clearRect(0, 0, PW, PH);
-  rr(g, 2, 2, PW - 4, PH - 4, 34); g.fillStyle = 'rgba(16,19,24,0.94)'; g.fill();
+  rr(g, 2, 2, PW - 4, panelUsedH - 4, 34); g.fillStyle = 'rgba(16,19,24,0.94)'; g.fill();
   g.lineWidth = 2; g.strokeStyle = 'rgba(255,255,255,0.10)'; g.stroke();
   const src = current && current.source;
   g.textBaseline = 'middle'; g.textAlign = 'left'; g.fillStyle = C.fg; g.font = '600 32px ' + FONT;
   g.fillText(fitText(g, current ? current.name : 'No video', 760), 40, 56);
   g.textAlign = 'right'; g.fillStyle = C.muted; g.font = '500 30px ' + MONO;
   g.fillText(fmtTime(src ? src.time : 0) + ' / ' + fmtTime(src ? src.duration : 0), PW - 40, 56);
-  g.textAlign = 'left'; g.font = '700 20px ' + FONT; g.fillStyle = C.muted;
-  g.fillText('BACKGROUND REPLACEMENT', 42, 274); g.fillText('VIDEO FORMAT', 42, 650);
   for (const it of pItems) {
     const hov = hovered.has(it.id);
-    if (it.type === 'btn') {
+    if (it.type === 'heading') {
+      g.textAlign = 'left'; g.font = '700 20px ' + FONT; g.fillStyle = C.muted; g.fillText(it.label, it.x, it.y);
+    } else if (it.type === 'text') {
+      g.textAlign = 'left'; g.font = '500 22px ' + FONT; g.fillStyle = C.muted;
+      wrapText(g, it.label, it.w).forEach((line, i) => g.fillText(line, it.x, it.y + i * 30));
+    } else if (it.type === 'btn') {
       rr(g, it.x, it.y, it.w, it.h, 16);
-      g.fillStyle = it.accent ? (hov ? C.keyHi : C.key) : it.active ? 'rgba(57,196,124,0.22)' : hov ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.07)';
+      g.fillStyle = it.disabled ? 'rgba(255,255,255,0.03)' : it.accent ? (hov ? C.keyHi : C.key) : it.active ? 'rgba(57,196,124,0.22)' : hov ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.07)';
       g.fill();
-      if (it.active) { g.lineWidth = 3; g.strokeStyle = C.key; g.stroke(); }
-      g.fillStyle = it.accent ? C.keyInk : C.fg; g.font = `600 ${it.fs || 27}px ${FONT}`; g.textAlign = 'center';
+      if (it.active && !it.disabled) { g.lineWidth = 3; g.strokeStyle = C.key; g.stroke(); }
+      g.fillStyle = it.disabled ? 'rgba(235,231,223,0.32)' : it.accent ? C.keyInk : C.fg; g.font = `600 ${it.fs || 27}px ${FONT}`; g.textAlign = 'center';
       let cx = it.x + it.w / 2;
       if (it.swatch) { g.save(); g.fillStyle = it.swatch; g.beginPath(); g.arc(it.x + 30, it.y + it.h / 2, 11, 0, Math.PI * 2); g.fill(); g.restore(); cx += 18; g.fillStyle = C.fg; }
-      g.fillText(fitText(g, it.label, it.w - 28), cx, it.y + it.h / 2 + 1);
+      g.fillText(fitText(g, it.label, it.w - (it.swatch ? 64 : 28)), cx, it.y + it.h / 2 + 1);
     } else if (it.type === 'label') {
       rr(g, it.x, it.y, it.w, it.h, 16); g.fillStyle = 'rgba(255,255,255,0.04)'; g.fill();
       g.fillStyle = C.fg; g.font = '500 26px ' + FONT; g.textAlign = 'center';
@@ -1056,7 +1399,10 @@ function drawPanel(hovered) {
   }
   ptex.needsUpdate = true;
 }
-function itemAt(x, y) { for (const it of pItems) if (it.type !== 'label' && x >= it.x && x <= it.x + it.w && y >= it.y - 6 && y <= it.y + it.h + 6) return it; return null; }
+function itemAt(x, y) {
+  for (const it of pItems) if ((it.type === 'btn' || it.type === 'slider' || it.type === 'seek') && x >= it.x && x <= it.x + it.w && y >= it.y - 6 && y <= it.y + it.h + 6) return it;
+  return null;
+}
 function dragTo(it, x) {
   const f = clamp((x - it.x) / it.w, 0, 1);
   if (it.type === 'seek') { const s = current && current.source; if (s && isFinite(s.duration)) s.seek(f * s.duration); panelDirty = true; }
@@ -1067,6 +1413,7 @@ function dragTo(it, x) {
 const head = { pos: new THREE.Vector3(), quat: new THREE.Quaternion(), scale: new THREE.Vector3() };
 const euler = new THREE.Euler(0, 0, 0, 'YXZ');
 function headYaw() { euler.setFromQuaternion(head.quat, 'YXZ'); return euler.y; }
+function headPitch() { euler.setFromQuaternion(head.quat, 'YXZ'); return euler.x; }
 function recenter() {
   if (renderer.xr.isPresenting) content.rotation.y = headYaw();
   else { view.yaw = 0; view.pitch = 0; }
@@ -1074,70 +1421,134 @@ function recenter() {
 }
 function placePanel() {
   const yaw = headYaw();
-  const off = new THREE.Vector3(0, -0.28, -0.85).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+  const off = new THREE.Vector3(0, -0.3, -0.95).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
   panel.position.copy(head.pos).add(off);
-  panel.rotation.set(-0.3, yaw, 0, 'YXZ');
+  panel.rotation.set(-0.28, yaw, 0, 'YXZ');
+  panel.updateMatrixWorld();
 }
 function setMenu(open) { menuOpen = open; if (open) placePanel(); panel.visible = open && renderer.xr.isPresenting; panelDirty = true; }
+function hangInFront(picId) {
+  // In VR the menu sits low, so hang new pictures at eye level in the direction you face.
+  const vr = renderer.xr.isPresenting;
+  const yaw = vr ? headYaw() - content.rotation.y : view.yaw;
+  const pitch = vr ? Math.max(0, headPitch()) : view.pitch;
+  addWall(picId, yaw * 180 / Math.PI, pitch * 180 / Math.PI);
+}
 
 const raycaster = new THREE.Raycaster();
-const tmpMat = new THREE.Matrix4();
+const tmpMat = new THREE.Matrix4(), tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3(), yAxis = new THREE.Vector3(0, 1, 0);
+function setRay(st) {
+  tmpMat.identity().extractRotation(st.c.matrixWorld);
+  raycaster.ray.origin.setFromMatrixPosition(st.c.matrixWorld);
+  raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tmpMat);
+}
+// Where the current ray meets a sphere of the given radius around you, as direction and height angles.
+function rayToYawPitch(dist) {
+  const d = raycaster.ray.direction;
+  tmpV.copy(raycaster.ray.origin).sub(content.position);
+  const b = tmpV.dot(d), c = tmpV.lengthSq() - dist * dist, disc = b * b - c;
+  if (disc < 0) return null;
+  const t = -b + Math.sqrt(disc);
+  if (t <= 0) return null;
+  tmpV2.copy(d).multiplyScalar(t).add(tmpV).applyAxisAngle(yAxis, -content.rotation.y);
+  return { yaw: Math.atan2(-tmpV2.x, -tmpV2.z) * 180 / Math.PI, pitch: Math.asin(clamp(tmpV2.y / dist, -1, 1)) * 180 / Math.PI, t };
+}
+function startWallDrag(st) {
+  const w = walls.find(x => x.id === st.wallHover); if (!w) return;
+  setRay(st);
+  const p = rayToYawPitch(w.dist); if (!p) return;
+  st.wallDrag = { id: w.id, dYaw: normDeg(w.yaw - p.yaw), dPitch: w.pitch - p.pitch };
+}
+function endWallDrag(st) {
+  const id = st.wallDrag && st.wallDrag.id; st.wallDrag = null;
+  saveWalls();
+  const w = walls.find(x => x.id === id); if (w) syncWallInputs(w);
+}
+
 const cursorGeo = new THREE.SphereGeometry(0.008, 12, 8);
 const ctrls = [0, 1].map((i) => {
   const c = renderer.xr.getController(i);
   const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)]), new THREE.LineBasicMaterial({ color: 0xf2efe9, transparent: true, opacity: 0.55 }));
   line.scale.z = 2; line.visible = false; c.add(line);
-  const cursor = new THREE.Mesh(cursorGeo, new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false }));
+  const cursor = new THREE.Mesh(cursorGeo, new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false, transparent: true }));
   cursor.renderOrder = 11; cursor.visible = false; scene.add(cursor);
-  const st = { c, line, cursor, src: null, hover: null, hit: null, prev: [], drag: null, lastSeek: 0 };
+  const st = { c, line, cursor, src: null, hover: null, hit: null, prev: [], drag: null, lastSeek: 0, wallHover: null, wallDrag: null };
   c.addEventListener('connected', (e) => { st.src = e.data; line.visible = true; });
-  c.addEventListener('disconnected', () => { st.src = null; line.visible = false; cursor.visible = false; });
+  c.addEventListener('disconnected', () => { st.src = null; line.visible = false; cursor.visible = false; if (st.wallDrag) endWallDrag(st); });
   c.addEventListener('selectstart', () => {
-    if (!menuOpen) { setMenu(true); return; }
-    const it = st.hover; if (!it) return;
-    if (it.type === 'btn') it.act();
-    else if (it.type === 'slider' || it.type === 'seek') { st.drag = it; if (st.hit) dragTo(it, st.hit.x); }
+    if (menuOpen && st.hover) {
+      const it = st.hover;
+      if (it.type === 'btn') { if (!it.disabled) it.act(); }
+      else { st.drag = it; if (st.hit) dragTo(it, st.hit.x); }
+      return;
+    }
+    if (st.wallHover) { startWallDrag(st); return; }
+    if (!menuOpen) setMenu(true);
   });
-  c.addEventListener('selectend', () => { st.drag = null; });
+  c.addEventListener('selectend', () => { st.drag = null; if (st.wallDrag) endWallDrag(st); });
   scene.add(c);
   return st;
 });
 
 let placeCountdown = 0;
-function updateXR(now) {
+const highlighted = new Set();
+function updateXR(now, dt) {
   const xrCam = renderer.xr.getCamera();
   xrCam.matrixWorld.decompose(head.pos, head.quat, head.scale);
   content.position.copy(head.pos);
+  content.updateMatrixWorld(true);
   if (placeCountdown > 0 && --placeCountdown === 0) { recenter(); setMenu(true); }
   panel.visible = menuOpen;
   let hoverChanged = false;
+  highlighted.clear();
   for (const st of ctrls) {
     st.c.updateMatrixWorld(true);
-    let hit = null;
-    if (menuOpen && st.src) {
-      tmpMat.identity().extractRotation(st.c.matrixWorld);
-      raycaster.ray.origin.setFromMatrixPosition(st.c.matrixWorld);
-      raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tmpMat);
-      const hits = raycaster.intersectObject(panel, false);
-      if (hits.length && hits[0].uv) hit = hits[0];
+    let menuHit = null, wallHit = null;
+    if (st.src) {
+      setRay(st);
+      if (menuOpen) { const h = raycaster.intersectObject(panel, false)[0]; if (h && h.uv && (1 - h.uv.y) * PH <= panelUsedH) menuHit = h; }
+      if (!st.drag && !st.wallDrag && wallObjs.size) { const h = raycaster.intersectObjects(wallPicMeshes(), false)[0]; if (h) wallHit = h; }
+      if (menuHit && wallHit) { if (menuHit.distance <= wallHit.distance) wallHit = null; else menuHit = null; }
     }
-    st.hit = hit ? { x: hit.uv.x * PW, y: (1 - hit.uv.y) * PH } : null;
-    st.line.scale.z = hit ? hit.distance : 2;
-    st.cursor.visible = !!hit; if (hit) st.cursor.position.copy(hit.point);
+    st.hit = menuHit ? { x: menuHit.uv.x * PW, y: (1 - menuHit.uv.y) * PH } : null;
     const it = st.hit ? itemAt(st.hit.x, st.hit.y) : null;
     if (it !== st.hover) { st.hover = it; hoverChanged = true; }
+    st.wallHover = wallHit ? wallHit.object.userData.wallId : null;
+    let len = menuHit ? menuHit.distance : wallHit ? wallHit.distance : 2;
+    let point = menuHit ? menuHit.point : wallHit ? wallHit.point : null;
     if (st.drag && st.hit) dragTo(st.drag, st.hit.x);
     const gp = st.src && st.src.gamepad;
+    const ax = gp && gp.axes.length > 2 ? gp.axes[2] : 0, ay = gp && gp.axes.length > 3 ? gp.axes[3] : 0;
+    if (st.wallDrag) {
+      const w = walls.find(x => x.id === st.wallDrag.id);
+      if (!w) st.wallDrag = null;
+      else {
+        const patch = {};
+        if (Math.abs(ay) > 0.15) patch.dist = clamp(w.dist * (1 - ay * dt * 1.2), 0.8, 15);
+        if (Math.abs(ax) > 0.15) patch.size = clamp(w.size * (1 + ax * dt * 1.2), 0.2, 8);
+        const p = rayToYawPitch(patch.dist || w.dist);
+        if (p) { patch.yaw = normDeg(p.yaw + st.wallDrag.dYaw); patch.pitch = clamp(p.pitch + st.wallDrag.dPitch, -80, 80); len = p.t; point = null; }
+        updateWall(w.id, patch, { noSave: true, noUi: true });
+        highlighted.add(w.id);
+      }
+    }
+    if (st.wallHover) highlighted.add(st.wallHover);
+    st.line.scale.z = len;
+    st.cursor.visible = !!point; if (point) st.cursor.position.copy(point);
     if (gp) {
       const pressed = gp.buttons.map(b => b.pressed);
       const edge = (i) => pressed[i] && !st.prev[i];
-      if (edge(4)) togglePlay();
+      if (st.wallDrag) {
+        if (edge(4)) { const id = st.wallDrag.id; st.wallDrag = null; removeWall(id); }
+      } else {
+        if (edge(4)) togglePlay();
+        if (Math.abs(ax) > 0.75 && now - st.lastSeek > 450) { seekBy(Math.sign(ax) * 10); st.lastSeek = now; }
+      }
       if (edge(5)) setMenu(!menuOpen);
-      const ax = gp.axes.length > 2 ? gp.axes[2] : 0;
-      if (Math.abs(ax) > 0.75 && now - st.lastSeek > 450) { seekBy(Math.sign(ax) * 10); st.lastSeek = now; }
       st.prev = pressed;
     }
   }
+  setWallHighlight(highlighted);
   if (hoverChanged) panelDirty = true;
 }
 function hoveredSet() { const s = new Set(); for (const st of ctrls) { if (st.hover) s.add(st.hover.id); if (st.drag) s.add(st.drag.id); } return s; }
@@ -1157,7 +1568,8 @@ async function enterVR() {
     session.addEventListener('end', () => {
       camera.layers.enable(1); menuOpen = false; panel.visible = false;
       content.position.set(0, 0, 0); content.rotation.set(0, 0, 0);
-      for (const st of ctrls) { st.cursor.visible = false; st.drag = null; st.hover = null; }
+      for (const st of ctrls) { st.cursor.visible = false; st.drag = null; st.hover = null; st.wallHover = null; if (st.wallDrag) endWallDrag(st); }
+      setWallHighlight(new Set());
       resize();
     });
   } catch (e) {
@@ -1186,8 +1598,9 @@ renderer.setAnimationLoop(() => {
   const now = performance.now(), dt = Math.min(0.1, (now - lastT) / 1000); lastT = now;
   const src = current && current.source;
   if (src) src.update(dt, now);
+  tickMaskWatch(now);
   if (renderer.xr.isPresenting) {
-    updateXR(now);
+    updateXR(now, dt);
     if (menuOpen && (panelDirty || now - lastPanel > 500)) { drawPanel(hoveredSet()); lastPanel = now; panelDirty = false; }
   } else {
     content.position.set(0, 0, 0);
@@ -1204,7 +1617,8 @@ async function boot() {
   for (const rec of saved) {
     try {
       bgs.push(await bgFromBlob(rec.blob, rec.name, rec.id, 'user'));
-      renderBgGrid();
+      renderBgGrid(); renderWallPick();
+      if (walls.some(w => w.pic === rec.id)) { syncWallObjs(); renderWallList(); }
       if (rec.id === S.bgId) { apply(); syncControls(); panelDirty = true; }
     } catch (e) { }
   }
@@ -1216,14 +1630,20 @@ async function boot() {
     }
   } catch (e) { }
   if (!bgById(S.bgId)) S.bgId = 'dusk';
-  renderBgGrid(); apply(); syncControls(); panelDirty = true;
+  // Drop hung pictures whose picture no longer exists.
+  const before = walls.length; walls = walls.filter(w => bgById(w.pic)); if (walls.length !== before) saveWalls();
+  renderBgGrid(); renderWallPick(); syncWallObjs(); renderWallList(); apply(); syncControls(); panelDirty = true;
 }
-renderBgGrid(); renderVideoList(); resize();
+renderBgGrid(); renderWallPick(); syncWallObjs(); renderWallList(); renderVideoList(); resize();
 selectVideo(0, false);
 demo.play();
 boot();
 if (document.fonts) document.fonts.ready.then(() => { panelDirty = true; });
-window.__greenroom = { S, videos, setS, drawPanel: () => { drawPanel(new Set()); return pcanvas.toDataURL('image/png'); }, autoKey, selectVideo };
+window.__greenroom = {
+  S, videos, setS, autoKey, selectVideo, detectPacked, addWall, removeAllWalls, rayToYawPitch, raycaster, content, vidU,
+  get walls() { return walls; }, get maskWatch() { return maskWatch; },
+  drawPanel: () => { drawPanel(new Set()); return pcanvas.toDataURL('image/png'); },
+};
 </script>
 </body>
 </html>
