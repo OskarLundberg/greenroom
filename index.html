@@ -193,6 +193,14 @@ h2{font-family:var(--display);font-weight:700;font-size:20px;letter-spacing:-.01
               <input type="radio" name="matte" id="mPacked" value="packed"><label for="mPacked">Passthrough mask</label>
             </div>
             <p class="fine" id="matteHint"></p>
+            <div id="roomBox">
+              <p class="fine" style="margin:12px 0 0">See-through area shows</p>
+              <div class="seg" role="radiogroup" aria-label="See-through area shows">
+                <input type="radio" name="room" id="rReplace" value="replace"><label for="rReplace">My backdrop</label>
+                <input type="radio" name="room" id="rKeep" value="keep"><label for="rKeep">The video's room</label>
+              </div>
+              <p class="fine" id="roomHint"></p>
+            </div>
             <div class="keyrow">
               <button id="autoKey" class="btn small" type="button">Auto-detect</button>
               <span class="keyrow" id="colorTools" style="margin:0">
@@ -219,7 +227,7 @@ h2{font-family:var(--display);font-weight:700;font-size:20px;letter-spacing:-.01
         <fieldset>
           <legend>Backdrop</legend>
           <div class="row two"><label for="bgMode">Placement</label>
-            <select id="bgMode"><option value="auto">Auto</option><option value="pano">Panorama 360°</option><option value="wall">Wall</option><option value="dome">Dome 180°</option></select></div>
+            <select id="bgMode"><option value="auto">Auto</option><option value="pano">Panorama 360°</option><option value="wall">Wall</option><option value="dome">Dome 180°</option><option value="cyl">Curved screen</option></select></div>
           <div class="row"><label for="bgYaw">Rotate</label><input id="bgYaw" type="range" min="-180" max="180" step="1"><output id="bgYawV"></output></div>
           <div class="row"><label for="bgHeight">Height</label><input id="bgHeight" type="range" min="-40" max="40" step="1"><output id="bgHeightV"></output></div>
           <div class="row"><label for="bgDim">Brightness</label><input id="bgDim" type="range" min="0.15" max="1.3" step="0.01"><output id="bgDimV"></output></div>
@@ -260,7 +268,7 @@ h2{font-family:var(--display);font-weight:700;font-size:20px;letter-spacing:-.01
         <div class="bin-head"><h2>Backdrops</h2><label class="btn small" for="imageInput" tabindex="0">Add pictures</label></div>
         <input id="imageInput" type="file" accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.avif" multiple hidden>
         <div class="bggrid" id="bgGrid"></div>
-        <p class="fine">Tap a picture to make it the backdrop that fills the see-through area. Wide 2:1 panoramas wrap all the way around; other photos become one big wall. Pictures are kept in this browser, so they're here next time.</p>
+        <p class="fine">Photo wall arranges all your pictures to fill the see-through area, however many you add. Tap a single picture to use it alone instead: wide 2:1 panoramas wrap all the way around, other photos become one big wall. Pictures are kept in this browser, so they're here next time.</p>
       </section>
     </aside>
   </div>
@@ -292,7 +300,7 @@ h2{font-family:var(--display);font-weight:700;font-size:20px;letter-spacing:-.01
         <kbd>B / Y</kbd><span>Show or hide the menu</span>
         <kbd>Stick ← →</kbd><span>Skip back or forward 10 seconds</span>
         <kbd>Recenter</kbd><span>Menu button. Turns the video to face you</span>
-        <kbd>Hold trigger</kbd><span>On a hung picture: move it. While holding, the stick changes distance and size, and A/X takes it down</span>
+        <kbd>Hold trigger</kbd><span>On a hung picture: move it. While holding, the stick changes distance and size (hold grip too to turn it), and A/X takes it down</span>
       </div>
     </div>
   </section>
@@ -340,8 +348,8 @@ const PROJ_ORDER = ['180', '360', 'fish190', 'fish200', 'fish220', 'flat'];
 const STEREO = { sbs: 'Side by side', tb: 'Top / bottom', mono: '2D' };
 const STEREO_SHORT = { sbs: 'SBS', tb: 'TB', mono: '2D' };
 const STEREO_ORDER = ['sbs', 'tb', 'mono'];
-const BGMODE = { auto: 'Auto', pano: 'Panorama', wall: 'Wall', dome: 'Dome' };
-const BGMODE_ORDER = ['auto', 'pano', 'wall', 'dome'];
+const BGMODE = { auto: 'Auto', pano: 'Panorama', wall: 'Wall', dome: 'Dome', cyl: 'Curved' };
+const BGMODE_ORDER = ['auto', 'pano', 'wall', 'dome', 'cyl'];
 const KEY_PRESETS = { green: [0, 177 / 255, 64 / 255], blue: [0, 71 / 255, 187 / 255] };
 const MATTE = { off: 'Off', color: 'Screen color', packed: 'Passthrough mask' };
 const MATTE_ORDER = ['off', 'color', 'packed'];
@@ -352,11 +360,15 @@ const MATTE_HINT = {
 };
 const MAX_WALLS = 12;
 const VIDEO_KEYS = ['proj', 'stereo', 'swap', 'flatFov', 'matte', 'keyColor', 'tol', 'soft', 'spill', 'maskCut'];
-const BG_KEYS = ['bgId', 'bgMode', 'bgYaw', 'bgHeight', 'bgDim', 'bgSize'];
+const BG_KEYS = ['bgId', 'bgMode', 'bgYaw', 'bgHeight', 'bgDim', 'bgSize', 'keepRoom'];
 const DEFAULT_VIDEO = { proj: '180', stereo: 'sbs', swap: false, flatFov: 80, matte: 'off', keyColor: KEY_PRESETS.green.slice(), tol: 0.15, soft: 0.08, spill: 0.12, maskCut: 0.06 };
 // Settings saved before the mode switch existed used a keyOn flag.
 function migrateVideo(o) { if (!o) return o; o = { ...o }; if (o.matte === undefined && o.keyOn !== undefined) o.matte = o.keyOn ? 'color' : 'off'; delete o.keyOn; return o; }
-const DEFAULT_BG = { bgId: 'dusk', bgMode: 'auto', bgYaw: 0, bgHeight: 0, bgDim: 0.9, bgSize: 100 };
+const DEFAULT_BG = { bgId: 'dusk', bgMode: 'auto', bgYaw: 0, bgHeight: 0, bgDim: 0.9, bgSize: 100, keepRoom: false };
+const ROOM_HINT = {
+  replace: 'The room in the video disappears. Your backdrop and hung pictures show behind the people.',
+  keep: "The video's own room stays. Hung pictures sit on top of it, so they look like they hang on its walls, and people still pass in front of them.",
+};
 const S = { ...DEFAULT_VIDEO, ...DEFAULT_BG, ...store.get('bg', {}) };
 
 /* ---------- renderer & scene ---------- */
@@ -388,6 +400,7 @@ const float PI = 3.14159265358979;
 const BG_FS = COMMON + `
 uniform sampler2D uBg; uniform bool uHasBg; uniform int uBgMode;
 uniform float uBgYaw; uniform float uBgPitch; uniform float uBgDim; uniform float uBgFov; uniform float uBgAspect;
+uniform float uBgCylH;
 uniform vec3 uBgFill;
 varying vec3 vDir;
 
@@ -404,6 +417,13 @@ vec3 sampleBg(vec3 d){
     float hw = tan(uBgFov * 0.5);
     uv = vec2(0.5 + p.x / (2.0 * hw), 0.5 + p.y * uBgAspect / (2.0 * hw));
     inside = step(0.0, -d.z) * step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
+    uvAlt = uv;
+  } else if(uBgMode == 3){
+    // curved screen: a cylinder around you, uBgFov wide, up to uBgCylH (tan of the angle) up and down
+    float lon = atan(d.x, -d.z);
+    float h = d.y / max(length(d.xz), 1e-4);
+    uv = vec2(0.5 + lon / uBgFov, 0.5 + h / (2.0 * uBgCylH));
+    inside = step(abs(lon), uBgFov * 0.5) * step(abs(h), uBgCylH);
     uvAlt = uv;
   } else {
     float lon = atan(d.x, -d.z); float lat = asin(clamp(d.y, -1.0, 1.0));
@@ -429,6 +449,7 @@ uniform sampler2D uMap; uniform bool uHasMap;
 uniform vec4 uEye; uniform int uProj; uniform float uFov; uniform float uAspect;
 uniform int uMatte; uniform vec2 uKeyCC; uniform float uTol; uniform float uSoft; uniform float uSpill;
 uniform float uMaskLo; uniform float uMaskHi;
+uniform bool uOpaque;
 varying vec3 vDir;
 
 vec2 cbcr(vec3 c){
@@ -477,6 +498,7 @@ void main(){
   vec2 uv;
   if(!projUV(normalize(vDir), uv)) discard;
   vec3 v = texture2D(uMap, uEye.xy + uv * uEye.zw).rgb;
+  if(uOpaque){ gl_FragColor = vec4(v, 1.0); return; }   // keep-the-room base layer
   float a = 1.0;
   if(uMatte == 1){
     float base = distance(cbcr(v), uKeyCC) - uTol;
@@ -492,7 +514,7 @@ void main(){
 
 const bgU = {
   uBg: { value: null }, uHasBg: { value: false }, uBgMode: { value: 0 },
-  uBgYaw: { value: 0 }, uBgPitch: { value: 0 }, uBgDim: { value: 1 }, uBgFov: { value: 1.7 }, uBgAspect: { value: 1.5 },
+  uBgYaw: { value: 0 }, uBgPitch: { value: 0 }, uBgDim: { value: 1 }, uBgFov: { value: 1.7 }, uBgAspect: { value: 1.5 }, uBgCylH: { value: 1 },
   uBgFill: { value: new THREE.Vector3(0.043, 0.051, 0.063) },
 };
 const vidU = {
@@ -507,15 +529,20 @@ const bgMesh = new THREE.Mesh(new THREE.SphereGeometry(30, 48, 24), new THREE.Sh
   uniforms: bgU, vertexShader: VS, fragmentShader: BG_FS, side: THREE.BackSide, depthWrite: false, depthTest: false,
 }));
 bgMesh.renderOrder = -20; bgMesh.frustumCulled = false; content.add(bgMesh);
-const makeEyeMat = () => new THREE.ShaderMaterial({
-  uniforms: { ...vidU, uEye: { value: new THREE.Vector4(0, 0, 1, 1) } },
-  vertexShader: VS, fragmentShader: VIDEO_FS, side: THREE.BackSide, transparent: true, depthWrite: false, depthTest: false,
+const makeEyeMat = (opaque) => new THREE.ShaderMaterial({
+  uniforms: { ...vidU, uEye: { value: new THREE.Vector4(0, 0, 1, 1) }, uOpaque: { value: !!opaque } },
+  vertexShader: VS, fragmentShader: VIDEO_FS, side: THREE.BackSide, transparent: !opaque, depthWrite: false, depthTest: false,
 });
 const sphereGeo = new THREE.SphereGeometry(20, 64, 32);
 const matL = makeEyeMat(), matR = makeEyeMat();
 const meshL = new THREE.Mesh(sphereGeo, matL), meshR = new THREE.Mesh(sphereGeo, matR);
 meshL.layers.set(1); meshR.layers.set(2);
 for (const m of [meshL, meshR]) { m.frustumCulled = false; m.renderOrder = -10; content.add(m); }
+// Keep-the-room: the whole video underneath, hung pictures above it, the masked people on top.
+const matBL = makeEyeMat(true), matBR = makeEyeMat(true);
+const meshBL = new THREE.Mesh(sphereGeo, matBL), meshBR = new THREE.Mesh(sphereGeo, matBR);
+meshBL.layers.set(1); meshBR.layers.set(2);
+for (const m of [meshBL, meshBR]) { m.frustumCulled = false; m.renderOrder = -18; m.visible = false; content.add(m); }
 
 /* ---------- video sources ---------- */
 function setupVideoTex(tex) {
@@ -716,6 +743,81 @@ bgs.push({ id: 'none', name: 'None', kind: 'builtin', tex: null, aspect: 2, avg:
 addBuiltinBg('dusk', 'Dusk ridge', makeDusk);
 addBuiltinBg('studio', 'Grey studio', makeStudio);
 
+/* ---------- photo wall: every picture you add, arranged to fill the view ---------- */
+const PW_SPAN = 200;     // degrees wide, enough for 180° and fisheye videos
+const PW_HALF_H = 52;    // degrees up and down from eye level
+const PW_ASPECT = (PW_SPAN * Math.PI / 180) / (2 * Math.tan(PW_HALF_H * Math.PI / 180));
+const photoWall = { id: 'photowall', name: 'Photo wall', kind: 'auto', tex: null, aspect: PW_ASPECT, avg: [0.06, 0.065, 0.075], thumb: null, cyl: true, count: 0 };
+bgs.push(photoWall);
+const wallPictures = () => bgs.filter(b => (b.kind === 'user' || b.kind === 'bundled') && b.tex && b.tex.image);
+// Justified rows: pick the row count whose natural height is closest to the space available.
+function justifiedRows(aspects, W, H, gap) {
+  const N = aspects.length, total = aspects.reduce((a, b) => a + b, 0);
+  let best = null;
+  for (let R = 1; R <= Math.min(N, 16); R++) {
+    const target = total / R, rows = [];
+    let cum = 0;
+    aspects.forEach((a, i) => { const r = Math.min(R - 1, Math.floor((cum + a / 2) / target)); (rows[r] = rows[r] || []).push(i); cum += a; });
+    const used = rows.filter(Boolean);
+    const heights = used.map(r => (W - gap * (r.length - 1)) / r.reduce((sum, i) => sum + aspects[i], 0));
+    const T = heights.reduce((sum, h) => sum + h, 0) + gap * (used.length - 1);
+    const score = Math.abs(Math.log(T / H));
+    if (!best || score < best.score) best = { rows: used, heights, score };
+  }
+  return best;
+}
+function drawCover(g, img, x, y, w, h) {
+  const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
+  const k = Math.max(w / iw, h / ih), sw = w / k, sh = h / k;
+  g.drawImage(img, (iw - sw) / 2, (ih - sh) / 2, sw, sh, x, y, w, h);
+}
+let photoWallTimer = 0;
+function schedulePhotoWall() { clearTimeout(photoWallTimer); photoWallTimer = setTimeout(buildPhotoWall, 250); }
+function buildPhotoWall() {
+  clearTimeout(photoWallTimer);
+  const pics = wallPictures();
+  photoWall.count = pics.length;
+  photoWall.name = pics.length ? 'Photo wall (' + pics.length + ')' : 'Photo wall';
+  if (photoWall.tex) { photoWall.tex.dispose(); photoWall.tex = null; }
+  photoWall.thumb = null;
+  if (pics.length) {
+    const W = Math.min(4096, maxTex), H = Math.round(W / PW_ASPECT), gap = Math.max(4, Math.round(W * 0.0025));
+    const layer = document.createElement('canvas'); layer.width = W; layer.height = H;
+    const lg = layer.getContext('2d');
+    const L = justifiedRows(pics.map(p => p.aspect), W, H, gap);
+    const gaps = gap * (L.rows.length - 1), natural = L.heights.reduce((a, b) => a + b, 0);
+    // Stretch rows to fill the height, cropping each picture by at most ~25%; past that, shrink and centre.
+    const k = (H - gaps) / natural;
+    let rowScale = k, xScale = 1;
+    if (k > 1.3) rowScale = 1.3;
+    else if (k < 1 / 1.3) { xScale = (H - gaps) * 1.3 / natural; rowScale = xScale / 1.3; }
+    const blockH = natural * rowScale + gaps;
+    let y = (H - blockH) / 2, margin = blockH < H - 2;
+    L.rows.forEach((row, ri) => {
+      const h = L.heights[ri] * rowScale;
+      const widths = row.map(i => pics[i].aspect * L.heights[ri] * xScale);
+      const rowW = widths.reduce((a, b) => a + b, 0) + gap * (row.length - 1);
+      if (rowW < W - 2) margin = true;
+      let x = (W - rowW) / 2;
+      row.forEach((i, j) => { drawCover(lg, pics[i].tex.image, Math.round(x), Math.round(y), Math.round(widths[j]), Math.round(h)); x += widths[j] + gap; });
+      y += h + gap;
+    });
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const g = c.getContext('2d');
+    g.fillStyle = '#0d0f12'; g.fillRect(0, 0, W, H);
+    if (margin) {
+      // Fill any leftover edges with a dark, blurred copy of the wall instead of empty space.
+      g.save(); g.filter = 'blur(' + Math.round(W / 60) + 'px) brightness(0.45)';
+      g.drawImage(layer, -W * 0.1, -H * 0.1, W * 1.2, H * 1.2); g.restore();
+    }
+    g.drawImage(layer, 0, 0);
+    photoWall.tex = bgTexture(c); photoWall.avg = averageColor(c); photoWall.thumb = thumbOf(c);
+  }
+  renderBgGrid();
+  if (S.bgId === 'photowall') apply();
+  panelDirty = true;
+}
+
 /* ---------- pictures hung around you ---------- */
 const FLAT_VS = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
 const WALL_FS = `precision highp float; uniform sampler2D uTex; uniform float uDim; varying vec2 vUv;
@@ -725,13 +827,14 @@ const FRAME_RGB = [0.07, 0.08, 0.1], FRAME_HI = [57 / 255, 196 / 255, 124 / 255]
 const wallDim = { value: 1 };
 const planeGeo = new THREE.PlaneGeometry(1, 1);
 const wallGroup = new THREE.Group(); content.add(wallGroup);
-let walls = (store.get('walls', []) || []).filter(w => w && w.id && w.pic);
+let walls = (store.get('walls', []) || []).filter(w => w && w.id && w.pic).map(w => ({ turn: 0, ...w }));
 const wallObjs = new Map();
 const WALL_FIELDS = [
   { k: 'yaw', label: 'Direction', min: -180, max: 180, step: 1, fmt: v => Math.round(v) + '°' },
   { k: 'pitch', label: 'Height', min: -80, max: 80, step: 1, fmt: v => Math.round(v) + '°' },
   { k: 'dist', label: 'Distance', min: 0.8, max: 15, step: 0.1, fmt: v => v.toFixed(1) + ' m' },
   { k: 'size', label: 'Size', min: 0.2, max: 8, step: 0.05, fmt: v => v.toFixed(1) + ' m' },
+  { k: 'turn', label: 'Turn', min: -80, max: 80, step: 1, fmt: v => Math.round(v) + '°' },
 ];
 function wallDir(yawDeg, pitchDeg) {
   const t = yawDeg * Math.PI / 180, p = pitchDeg * Math.PI / 180;
@@ -740,7 +843,7 @@ function wallDir(yawDeg, pitchDeg) {
 function placeWallObj(w, o) {
   const b = bgById(w.pic), aspect = b ? b.aspect : 1.5, h = w.size / aspect;
   o.group.position.copy(wallDir(w.yaw, w.pitch)).multiplyScalar(w.dist);
-  o.group.rotation.set(w.pitch * Math.PI / 180, w.yaw * Math.PI / 180, 0, 'YXZ');
+  o.group.rotation.set(w.pitch * Math.PI / 180, (w.yaw + (w.turn || 0)) * Math.PI / 180, 0, 'YXZ');
   o.pic.scale.set(w.size, h, 1);
   const border = Math.max(0.02, w.size * 0.025);
   o.frame.scale.set(w.size + border * 2, h + border * 2, 1);
@@ -774,7 +877,7 @@ function setWallHighlight(ids) {
   }
 }
 const saveWalls = () => store.set('walls', walls);
-const hangable = () => bgs.filter(b => b.tex);
+const hangable = () => bgs.filter(b => b.tex && b.kind !== 'auto');
 function addWall(picId, yawDeg, pitchDeg) {
   if (walls.length >= MAX_WALLS) { toast('You can hang up to ' + MAX_WALLS + ' pictures. Take one down first.'); return null; }
   const b = bgById(picId); if (!b || !b.tex) return null;
@@ -784,7 +887,7 @@ function addWall(picId, yawDeg, pitchDeg) {
     const y = Math.round(normDeg(yawDeg + off));
     if (!walls.some(w => Math.abs(normDeg(w.yaw - y)) < 24 && Math.abs(w.pitch - pitch) < 22)) { yaw = y; break; }
   }
-  const w = { id: 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), pic: picId, yaw, pitch, dist: 3, size: b.aspect >= 1.9 ? 2.6 : 1.4 };
+  const w = { id: 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), pic: picId, yaw, pitch, dist: 3, size: b.aspect >= 1.9 ? 2.6 : 1.4, turn: 0 };
   walls.push(w); saveWalls(); syncWallObjs(); renderWallList(); panelDirty = true;
   return w;
 }
@@ -938,7 +1041,10 @@ function setS(patch) {
 }
 
 /* ---------- apply state to the shader ---------- */
-function resolvedBgMode(bg) { return S.bgMode === 'auto' ? (bg && bg.aspect >= 1.9 ? 'pano' : 'wall') : S.bgMode; }
+function resolvedBgMode(bg) {
+  if (S.bgMode !== 'auto') return S.bgMode;
+  return bg && bg.cyl ? 'cyl' : bg && bg.aspect >= 1.9 ? 'pano' : 'wall';
+}
 function apply() {
   const u = vidU, src = current && current.source;
   u.uHasMap.value = !!(src && src.ready);
@@ -950,6 +1056,8 @@ function apply() {
   else if (S.stereo === 'tb') { L = [0, 0.5, 1, 0.5]; R = [0, 0, 1, 0.5]; }
   if (S.swap) [L, R] = [R, L];
   matL.uniforms.uEye.value.set(...L); matR.uniforms.uEye.value.set(...R);
+  matBL.uniforms.uEye.value.set(...L); matBR.uniforms.uEye.value.set(...R);
+  meshBL.visible = meshBR.visible = !!(S.keepRoom && S.matte === 'packed');
   const w = src ? src.width : 2, h = src ? src.height : 1;
   u.uAspect.value = (w * L[2]) / (h * L[3]);
   u.uMatte.value = S.matte === 'color' ? 1 : S.matte === 'packed' ? 2 : 0;
@@ -960,12 +1068,14 @@ function apply() {
   const bg = bgById(S.bgId) || bgById('none'), b = bgU;
   b.uHasBg.value = !!bg.tex; b.uBg.value = bg.tex;
   const mode = resolvedBgMode(bg);
-  b.uBgMode.value = mode === 'pano' ? 0 : mode === 'wall' ? 1 : 2;
+  b.uBgMode.value = mode === 'pano' ? 0 : mode === 'wall' ? 1 : mode === 'dome' ? 2 : 3;
   b.uBgAspect.value = bg.aspect;
   const f = bg.tex ? 0.45 * S.bgDim : 1;
   b.uBgFill.value.set(bg.avg[0] * f, bg.avg[1] * f, bg.avg[2] * f);
   b.uBgYaw.value = S.bgYaw * Math.PI / 180; b.uBgPitch.value = S.bgHeight * Math.PI / 180;
-  b.uBgDim.value = S.bgDim; b.uBgFov.value = S.bgSize * Math.PI / 180;
+  b.uBgDim.value = S.bgDim;
+  if (mode === 'cyl') { const span = PW_SPAN * Math.PI / 180; b.uBgFov.value = span; b.uBgCylH.value = span / (2 * bg.aspect); }
+  else b.uBgFov.value = S.bgSize * Math.PI / 180;
   wallDim.value = S.bgDim;
   updateSpec();
 }
@@ -1091,6 +1201,9 @@ function syncControls() {
   $('matteHint').textContent = looking ? 'Looking for a passthrough mask in this video. It shows up once someone is in the shot.' : MATTE_HINT[S.matte];
   $('colorTools').hidden = S.matte !== 'color'; $('colorRows').hidden = S.matte !== 'color';
   $('maskRows').hidden = S.matte !== 'packed'; $('offNote').hidden = S.matte !== 'off';
+  $('roomBox').hidden = S.matte !== 'packed';
+  for (const r of document.querySelectorAll('input[name=room]')) r.checked = r.value === (S.keepRoom ? 'keep' : 'replace');
+  $('roomHint').textContent = ROOM_HINT[S.keepRoom ? 'keep' : 'replace'];
   $('keyColor').value = toHex(S.keyColor);
   for (const k of ['tol', 'soft', 'spill']) { $(k).value = S[k]; $(k + 'V').textContent = S[k].toFixed(2); }
   $('maskCut').value = S.maskCut; $('maskCutV').textContent = Math.round(S.maskCut * 100) + '%';
@@ -1175,8 +1288,8 @@ async function removeBg(b) {
   bgs.splice(i, 1); if (b.tex) b.tex.dispose(); if (b.url) URL.revokeObjectURL(b.url);
   await idb.del(b.id);
   if (walls.some(w => w.pic === b.id)) { walls = walls.filter(w => w.pic !== b.id); saveWalls(); syncWallObjs(); renderWallList(); }
-  renderWallPick();
-  if (S.bgId === b.id) setS({ bgId: 'dusk' }); else renderBgGrid();
+  renderWallPick(); schedulePhotoWall();
+  if (S.bgId === b.id) setS({ bgId: wallPictures().length ? 'photowall' : 'dusk' }); else renderBgGrid();
 }
 async function addImages(files) {
   let last = null, added = 0;
@@ -1192,10 +1305,13 @@ async function addImages(files) {
   renderWallPick();
   if (last) {
     $('wallPick').value = last.id;
-    // Only take over the backdrop while it's still one of the built-in ones.
+    buildPhotoWall();
+    // Switch to the photo wall while the backdrop is still one of the built-in ones.
     const cur = bgById(S.bgId);
-    if (!cur || cur.kind === 'builtin') setS({ bgId: last.id }); else renderBgGrid();
-    toast(added === 1 ? 'Picture added: ' + last.name : added + ' pictures added');
+    if (!cur || cur.kind === 'builtin') setS({ bgId: 'photowall' }); else renderBgGrid();
+    toast(S.bgId === 'photowall'
+      ? (added === 1 ? 'Picture added to your photo wall.' : added + ' pictures added to your photo wall.')
+      : (added === 1 ? 'Picture added: ' + last.name : added + ' pictures added'));
   } else renderBgGrid();
 }
 function addAny(files) {
@@ -1216,6 +1332,7 @@ $('stereo').addEventListener('change', (e) => setS({ stereo: e.target.value }));
 $('swap').addEventListener('change', (e) => setS({ swap: e.target.checked }));
 $('flatFov').addEventListener('input', (e) => setS({ flatFov: +e.target.value }));
 for (const r of document.querySelectorAll('input[name=matte]')) r.addEventListener('change', () => { if (r.checked) { stopMaskWatch(); setS({ matte: r.value }); } });
+for (const r of document.querySelectorAll('input[name=room]')) r.addEventListener('change', () => { if (r.checked) setS({ keepRoom: r.value === 'keep' }); });
 $('keyColor').addEventListener('input', (e) => setS({ keyColor: fromHex(e.target.value), matte: 'color' }));
 $('autoKey').addEventListener('click', autoDetect);
 $('keyGreen').addEventListener('click', () => setS({ keyColor: KEY_PRESETS.green.slice(), matte: 'color' }));
@@ -1301,8 +1418,12 @@ function panelItems() {
     () => { stopMaskWatch(); setS({ matte: MATTE_ORDER[(MATTE_ORDER.indexOf(S.matte) + 1) % MATTE_ORDER.length] }); },
     { active: S.matte !== 'off', swatch: S.matte === 'color' ? toHex(S.keyColor) : null, fs: 25 });
   B('auto', 360, y, 220, 60, 'Auto-detect', autoDetect, { fs: 25 });
-  B('green', 596, y, 120, 60, 'Green', () => { stopMaskWatch(); setS({ keyColor: KEY_PRESETS.green.slice(), matte: 'color' }); }, { fs: 25 });
-  B('blue', 732, y, 110, 60, 'Blue', () => { stopMaskWatch(); setS({ keyColor: KEY_PRESETS.blue.slice(), matte: 'color' }); }, { fs: 25 });
+  if (S.matte === 'color') {
+    B('green', 596, y, 120, 60, 'Green', () => { stopMaskWatch(); setS({ keyColor: KEY_PRESETS.green.slice(), matte: 'color' }); }, { fs: 25 });
+    B('blue', 732, y, 110, 60, 'Blue', () => { stopMaskWatch(); setS({ keyColor: KEY_PRESETS.blue.slice(), matte: 'color' }); }, { fs: 25 });
+  } else if (S.matte === 'packed') {
+    B('room', 596, y, 246, 60, S.keepRoom ? 'Room: Keep' : 'Room: Replace', () => setS({ keepRoom: !S.keepRoom }), { active: S.keepRoom, fs: 25 });
+  }
   B('bgmode', 858, y, 302, 60, 'Placement: ' + BGMODE[S.bgMode], () => setS({ bgMode: BGMODE_ORDER[(BGMODE_ORDER.indexOf(S.bgMode) + 1) % BGMODE_ORDER.length] }), { fs: 24 });
   y += 76;
   const keys = S.matte === 'color' ? ['tol', 'soft', 'spill', 'bgDim', 'bgYaw', 'bgHeight'] : S.matte === 'packed' ? ['maskCut', 'bgDim', 'bgYaw', 'bgHeight'] : ['bgDim', 'bgYaw', 'bgHeight'];
@@ -1338,7 +1459,7 @@ function panelItems() {
   B('exit', 608, y, 552, 60, 'Exit VR', () => { const s = renderer.xr.getSession(); if (s) s.end(); });
   y += 84;
   it.push({ type: 'text', id: 'hint', x: 42, y, w: 1116, label: walls.length
-    ? 'To move a hung picture, point at it and hold the trigger. While holding: stick up/down changes distance, left/right changes size, A or X takes it down.'
+    ? 'To move a hung picture, point at it and hold the trigger. While holding: stick up/down = distance, left/right = size (also hold grip to turn it instead), A or X takes it down.'
     : 'Hang a picture, then point at it and hold the trigger to move it around you.' });
   panelUsedH = Math.min(PH, y + (walls.length ? 70 : 40));
   return it;
@@ -1525,7 +1646,11 @@ function updateXR(now, dt) {
       else {
         const patch = {};
         if (Math.abs(ay) > 0.15) patch.dist = clamp(w.dist * (1 - ay * dt * 1.2), 0.8, 15);
-        if (Math.abs(ax) > 0.15) patch.size = clamp(w.size * (1 + ax * dt * 1.2), 0.2, 8);
+        const grip = !!(gp && gp.buttons[1] && gp.buttons[1].pressed);
+        if (Math.abs(ax) > 0.15) {
+          if (grip) patch.turn = clamp((w.turn || 0) + ax * dt * 60, -80, 80);
+          else patch.size = clamp(w.size * (1 + ax * dt * 1.2), 0.2, 8);
+        }
         const p = rayToYawPitch(patch.dist || w.dist);
         if (p) { patch.yaw = normDeg(p.yaw + st.wallDrag.dYaw); patch.pitch = clamp(p.pitch + st.wallDrag.dPitch, -80, 80); len = p.t; point = null; }
         updateWall(w.id, patch, { noSave: true, noUi: true });
@@ -1617,7 +1742,7 @@ async function boot() {
   for (const rec of saved) {
     try {
       bgs.push(await bgFromBlob(rec.blob, rec.name, rec.id, 'user'));
-      renderBgGrid(); renderWallPick();
+      renderBgGrid(); renderWallPick(); schedulePhotoWall();
       if (walls.some(w => w.pic === rec.id)) { syncWallObjs(); renderWallList(); }
       if (rec.id === S.bgId) { apply(); syncControls(); panelDirty = true; }
     } catch (e) { }
@@ -1632,6 +1757,7 @@ async function boot() {
   if (!bgById(S.bgId)) S.bgId = 'dusk';
   // Drop hung pictures whose picture no longer exists.
   const before = walls.length; walls = walls.filter(w => bgById(w.pic)); if (walls.length !== before) saveWalls();
+  buildPhotoWall();
   renderBgGrid(); renderWallPick(); syncWallObjs(); renderWallList(); apply(); syncControls(); panelDirty = true;
 }
 renderBgGrid(); renderWallPick(); syncWallObjs(); renderWallList(); renderVideoList(); resize();
@@ -1640,7 +1766,7 @@ demo.play();
 boot();
 if (document.fonts) document.fonts.ready.then(() => { panelDirty = true; });
 window.__greenroom = {
-  S, videos, setS, autoKey, selectVideo, detectPacked, addWall, removeAllWalls, rayToYawPitch, raycaster, content, vidU,
+  S, videos, setS, autoKey, selectVideo, detectPacked, addWall, removeAllWalls, rayToYawPitch, raycaster, content, vidU, buildPhotoWall, photoWall,
   get walls() { return walls; }, get maskWatch() { return maskWatch; },
   drawPanel: () => { drawPanel(new Set()); return pcanvas.toDataURL('image/png'); },
 };
