@@ -114,12 +114,12 @@ h2{font-family:var(--display);font-weight:700;font-size:20px;letter-spacing:-.01
 .x{background:none;border:0;color:var(--muted);font-size:18px;line-height:1;padding:4px 7px;border-radius:6px;cursor:pointer}
 .x:hover{color:var(--fg);background:var(--panel-2)}
 .empty{border:1px dashed var(--line);border-radius:10px;padding:14px;color:var(--muted);font-size:13.5px}
-.bggrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.bggrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
 .bgtile{position:relative;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel);cursor:pointer;padding:0;text-align:left}
 .bgtile:hover{border-color:#3a414d}
 .bgtile.on{border-color:var(--key);box-shadow:0 0 0 1px var(--key)}
 .bgtile .thumb{display:block;width:100%;aspect-ratio:2/1;object-fit:cover;background:repeating-conic-gradient(var(--check-a) 0 25%,var(--check-b) 0 50%) 0 0/14px 14px}
-.bgtile .cap{display:block;padding:6px 8px;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bgtile .cap{display:block;padding:5px 7px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bgtile .x{position:absolute;top:4px;right:4px;background:rgba(10,12,15,.7);font-size:15px}
 
 /* How-to */
@@ -149,6 +149,27 @@ h2{font-family:var(--display);font-weight:700;font-size:20px;letter-spacing:-.01
 .wname{font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .wall .row{grid-template-columns:76px minmax(0,1fr) 52px;margin-top:8px}
 .walls-empty{margin:4px 0 0;color:var(--muted);font-size:13.5px}
+.showlist{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:12px}
+.show{border:1px solid var(--line);border-radius:12px;background:var(--panel-2);padding:12px;min-width:0}
+.drop{outline:2px dashed var(--key);outline-offset:3px}
+.shead{display:flex;align-items:center;gap:10px}
+.sname{flex:1 1 auto;min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-weight:600}
+.scount{color:var(--muted);font-size:13px;white-space:nowrap}
+.sdel{background:none;border:1px solid transparent;color:var(--muted);border-radius:7px;padding:5px 9px;cursor:pointer;font-weight:600;font-size:13px;white-space:nowrap}
+.sdel:hover{color:var(--fg);background:var(--panel)}
+.sdel.armed{color:#ffb4a8;border-color:#7a3a33}
+.sstrip{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;align-items:center}
+.sthumb{position:relative;width:72px;height:44px;border-radius:6px;overflow:hidden;background:var(--check-a);flex:none}
+.sthumb img{width:100%;height:100%;object-fit:cover;display:block}
+.sthumb .x{position:absolute;top:1px;right:1px;padding:0 5px;font-size:13px;line-height:18px;background:rgba(10,12,15,.78)}
+.sempty{color:var(--muted);font-size:13.5px;border:1px dashed var(--line);border-radius:8px;padding:12px;flex:1 1 100%}
+.sopts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:4px 22px;margin-top:6px}
+.sbtns{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.spick{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:6px;margin-top:10px;max-height:280px;overflow:auto;padding:3px}
+.spick button{position:relative;padding:0;border:2px solid transparent;border-radius:7px;overflow:hidden;background:var(--panel);cursor:pointer}
+.spick button img{display:block;width:100%;aspect-ratio:16/10;object-fit:cover}
+.spick button.on{border-color:var(--key)}
+.spick button.on::after{content:"✓";position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:50%;background:var(--key);color:var(--key-ink);font:700 12px/20px var(--body);text-align:center}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -254,6 +275,16 @@ h2{font-family:var(--display);font-weight:700;font-size:20px;letter-spacing:-.01
           <p class="fine">Hung pictures float around you behind the people in the video, like posters on the walls of a room, and your backdrop fills the rest. A new picture goes where you're looking. In VR, point at a picture and hold the trigger to move it.</p>
           <ul class="walllist" id="wallList"></ul>
         </fieldset>
+
+        <fieldset class="wide block" id="showsBox">
+          <legend>Slideshows</legend>
+          <div class="wallsadd">
+            <button id="showNew" class="btn small primary" type="button">New slideshow</button>
+            <span class="fine" style="margin:0">or drop pictures here to start one</span>
+          </div>
+          <p class="fine">A slideshow is a frame that cycles through its own pictures. Hang it and move it like any picture. A picture can be in several slideshows.</p>
+          <ul class="showlist" id="showList"></ul>
+        </fieldset>
       </div>
     </section>
 
@@ -296,7 +327,7 @@ h2{font-family:var(--display);font-weight:700;font-size:20px;letter-spacing:-.01
       <h3>Controllers in VR</h3>
       <div class="keys">
         <kbd>Trigger</kbd><span>Use the menu, or open it when it's hidden</span>
-        <kbd>A / X</kbd><span>Play or pause</span>
+        <kbd>A / X</kbd><span>Play or pause. Pointing at a slideshow: skip to its next picture</span>
         <kbd>B / Y</kbd><span>Show or hide the menu</span>
         <kbd>Stick ← →</kbd><span>Skip back or forward 10 seconds</span>
         <kbd>Recenter</kbd><span>Menu button. Turns the video to face you</span>
@@ -806,9 +837,11 @@ function buildPhotoWall() {
     const g = c.getContext('2d');
     g.fillStyle = '#0d0f12'; g.fillRect(0, 0, W, H);
     if (margin) {
-      // Fill any leftover edges with a dark, blurred copy of the wall instead of empty space.
-      g.save(); g.filter = 'blur(' + Math.round(W / 60) + 'px) brightness(0.45)';
-      g.drawImage(layer, -W * 0.1, -H * 0.1, W * 1.2, H * 1.2); g.restore();
+      // Fill any leftover edges with a dark, blurred copy of the wall instead of empty space (blurred small, then scaled up).
+      const sm = document.createElement('canvas'); sm.width = 256; sm.height = Math.max(1, Math.round(256 * H / W));
+      const sg = sm.getContext('2d'); sg.filter = 'blur(5px) brightness(0.45)';
+      sg.drawImage(layer, -26, -Math.round(sm.height * 0.1), 308, Math.round(sm.height * 1.2));
+      g.imageSmoothingQuality = 'high'; g.drawImage(sm, 0, 0, W, H);
     }
     g.drawImage(layer, 0, 0);
     photoWall.tex = bgTexture(c); photoWall.avg = averageColor(c); photoWall.thumb = thumbOf(c);
@@ -827,7 +860,98 @@ const FRAME_RGB = [0.07, 0.08, 0.1], FRAME_HI = [57 / 255, 196 / 255, 124 / 255]
 const wallDim = { value: 1 };
 const planeGeo = new THREE.PlaneGeometry(1, 1);
 const wallGroup = new THREE.Group(); content.add(wallGroup);
-let walls = (store.get('walls', []) || []).filter(w => w && w.id && w.pic).map(w => ({ turn: 0, ...w }));
+let walls = (store.get('walls', []) || []).filter(w => w && w.id && (w.pic || w.show)).map(w => ({ turn: 0, ...w }));
+
+/* slideshows: frames you hang like pictures, cycling through their own pictures */
+const SHAPES = { '3:2': ['Landscape 3:2', 1.5], '16:9': ['Wide 16:9', 16 / 9], '4:3': ['Classic 4:3', 4 / 3], '1:1': ['Square', 1], '2:3': ['Portrait 2:3', 2 / 3], '9:16': ['Tall 9:16', 9 / 16] };
+const SLIDE_FADE = 0.8, SLIDE_MAX = ON_HEADSET ? 2048 : 3072;
+let shows = (store.get('shows', []) || []).filter(x => x && x.id).map(x => ({ name: 'Slideshow', pics: [], interval: 8, shape: '3:2', fit: 'contain', order: 'seq', ...x }));
+const showById = (id) => shows.find(x => x.id === id);
+const saveShows = () => store.set('shows', shows);
+const showPics = (sh) => sh.pics.map(bgById).filter(b => b && b.tex && b.tex.image);
+const showAspect = (sh) => (SHAPES[sh && sh.shape] || SHAPES['3:2'])[1];
+// Slides use their own smaller textures (only the current and next are kept), so long slideshows stay light on the Quest.
+const slideCache = new Map();
+function slideTex(picId) {
+  let e = slideCache.get(picId);
+  if (!e) {
+    const b = bgById(picId); if (!b || !b.tex || !b.tex.image) return null;
+    const img = b.tex.image, iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
+    const k = Math.min(1, SLIDE_MAX / Math.max(iw, ih));
+    let src = img;
+    if (k < 1) { const c = document.createElement('canvas'); c.width = Math.round(iw * k); c.height = Math.round(ih * k); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); src = c; }
+    e = { tex: bgTexture(src), refs: 0 }; slideCache.set(picId, e);
+  }
+  e.refs++;
+  return e.tex;
+}
+function releaseSlide(picId) { const e = picId && slideCache.get(picId); if (!e) return; if (--e.refs <= 0) { e.tex.dispose(); slideCache.delete(picId); } }
+const SLIDE_FS = `precision highp float;
+uniform sampler2D uA; uniform sampler2D uB; uniform bool uHasA; uniform bool uHasB;
+uniform vec2 uAS; uniform vec2 uBS; uniform float uMix; uniform float uDim; uniform vec3 uMat;
+varying vec2 vUv;
+vec3 slide(sampler2D t, vec2 sc){
+  vec2 uv = (vUv - 0.5) * sc + 0.5;
+  float inside = step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
+  return mix(uMat, texture2D(t, clamp(uv, 0.0, 1.0)).rgb, inside);
+}
+void main(){
+  vec3 a = uHasA ? slide(uA, uAS) : uMat;
+  vec3 b = uHasB ? slide(uB, uBS) : a;
+  gl_FragColor = vec4(mix(a, b, uMix) * uDim, 1.0);
+}`;
+const makeSlideMat = () => new THREE.ShaderMaterial({
+  uniforms: { uA: { value: null }, uB: { value: null }, uHasA: { value: false }, uHasB: { value: false }, uAS: { value: new THREE.Vector2(1, 1) }, uBS: { value: new THREE.Vector2(1, 1) }, uMix: { value: 0 }, uDim: wallDim, uMat: { value: new THREE.Vector3(0.067, 0.075, 0.086) } },
+  vertexShader: FLAT_VS, fragmentShader: SLIDE_FS,
+});
+// uv scale for a picture of aspect P in a frame of aspect F: above 1 leaves a mat around it, below 1 crops it.
+function fitScale(P, F, fit) {
+  if (fit === 'cover') return P > F ? [F / P, 1] : [1, P / F];
+  return P > F ? [1, P / F] : [F / P, 1];
+}
+const slideScale = (picId, sh) => fitScale((bgById(picId) || {}).aspect || 1.5, showAspect(sh), sh.fit);
+function clearSlides(o) {
+  const sl = o.slide, u = o.picMat.uniforms;
+  releaseSlide(sl.a); releaseSlide(sl.b); sl.a = sl.b = null; sl.fading = false; sl.t = 0;
+  u.uA.value = u.uB.value = null; u.uHasA.value = u.uHasB.value = false; u.uMix.value = 0;
+}
+function nextSlideId(sh, pics, cur) {
+  if (pics.length < 2) return pics[0].id;
+  const i = pics.findIndex(p => p.id === cur);
+  if (sh.order === 'shuffle') { let j; do { j = Math.floor(Math.random() * pics.length); } while (j === i); return pics[j].id; }
+  return pics[(i + 1) % pics.length].id;
+}
+function tickSlides(dt) {
+  for (const [id, o] of wallObjs) {
+    if (!o.slide) continue;
+    const w = walls.find(x => x.id === id), sh = w && showById(w.show); if (!sh) continue;
+    const sl = o.slide, u = o.picMat.uniforms, pics = showPics(sh);
+    if (!pics.length) { if (sl.a || sl.b) clearSlides(o); continue; }
+    if (!sl.a || !pics.some(p => p.id === sl.a)) {   // first picture, or the current one left the slideshow
+      clearSlides(o); sl.a = pics[0].id; u.uA.value = slideTex(sl.a); u.uHasA.value = !!u.uA.value;
+    }
+    u.uAS.value.set(...slideScale(sl.a, sh));
+    if (sl.b) u.uBS.value.set(...slideScale(sl.b, sh));
+    if (sl.fading) {
+      u.uMix.value = Math.min(1, u.uMix.value + dt / SLIDE_FADE);
+      if (u.uMix.value >= 1) {
+        releaseSlide(sl.a); sl.a = sl.b; sl.b = null;
+        u.uA.value = u.uB.value; u.uHasA.value = !!u.uA.value; u.uAS.value.copy(u.uBS.value);
+        u.uB.value = null; u.uHasB.value = false; u.uMix.value = 0; sl.fading = false; sl.t = 0;
+      }
+    } else if (pics.length > 1) {
+      sl.t += dt;
+      if (sl.t >= sh.interval || sl.skip) {
+        sl.skip = false;
+        const to = nextSlideId(sh, pics, sl.a);
+        sl.b = to; u.uB.value = slideTex(to); u.uHasB.value = !!u.uB.value; u.uBS.value.set(...slideScale(to, sh));
+        u.uMix.value = 0; sl.fading = true; sl.t = 0;
+      }
+    }
+  }
+}
+function skipSlide(wallId) { const o = wallObjs.get(wallId); if (o && o.slide && !o.slide.fading) o.slide.skip = true; }
+const isShowWall = (wallId) => { const w = walls.find(x => x.id === wallId); return !!(w && w.show); };
 const wallObjs = new Map();
 const WALL_FIELDS = [
   { k: 'yaw', label: 'Direction', min: -180, max: 180, step: 1, fmt: v => Math.round(v) + '°' },
@@ -841,29 +965,33 @@ function wallDir(yawDeg, pitchDeg) {
   return new THREE.Vector3(-Math.sin(t) * Math.cos(p), Math.sin(p), -Math.cos(t) * Math.cos(p));
 }
 function placeWallObj(w, o) {
-  const b = bgById(w.pic), aspect = b ? b.aspect : 1.5, h = w.size / aspect;
+  const aspect = w.show ? showAspect(showById(w.show)) : ((bgById(w.pic) || {}).aspect || 1.5), h = w.size / aspect;
   o.group.position.copy(wallDir(w.yaw, w.pitch)).multiplyScalar(w.dist);
   o.group.rotation.set(w.pitch * Math.PI / 180, (w.yaw + (w.turn || 0)) * Math.PI / 180, 0, 'YXZ');
   o.pic.scale.set(w.size, h, 1);
   const border = Math.max(0.02, w.size * 0.025);
   o.frame.scale.set(w.size + border * 2, h + border * 2, 1);
 }
+const wallKey = (w) => w.show ? 'show:' + w.show : w.pic;
+const wallValid = (w) => w.show ? !!showById(w.show) : !!(bgById(w.pic) && bgById(w.pic).tex);
 function syncWallObjs() {
   for (const [id, o] of wallObjs) {
     const w = walls.find(x => x.id === id);
-    if (!w || !bgById(w.pic) || o.picId !== w.pic) { wallGroup.remove(o.group); o.picMat.dispose(); o.frameMat.dispose(); wallObjs.delete(id); }
+    if (!w || !wallValid(w) || o.key !== wallKey(w)) {
+      wallGroup.remove(o.group); if (o.slide) clearSlides(o); o.picMat.dispose(); o.frameMat.dispose(); wallObjs.delete(id);
+    }
   }
   for (const w of walls) {
-    const b = bgById(w.pic); if (!b || !b.tex) continue;
+    if (!wallValid(w)) continue;
     let o = wallObjs.get(w.id);
     if (!o) {
-      const picMat = new THREE.ShaderMaterial({ uniforms: { uTex: { value: b.tex }, uDim: wallDim }, vertexShader: FLAT_VS, fragmentShader: WALL_FS });
+      const picMat = w.show ? makeSlideMat() : new THREE.ShaderMaterial({ uniforms: { uTex: { value: bgById(w.pic).tex }, uDim: wallDim }, vertexShader: FLAT_VS, fragmentShader: WALL_FS });
       const frameMat = new THREE.ShaderMaterial({ uniforms: { uColor: { value: new THREE.Vector3(...FRAME_RGB) } }, vertexShader: FLAT_VS, fragmentShader: SOLID_FS });
       const pic = new THREE.Mesh(planeGeo, picMat), frame = new THREE.Mesh(planeGeo, frameMat);
       frame.position.z = -0.01; frame.renderOrder = -15; pic.renderOrder = -14;
       pic.userData.wallId = w.id;
       const group = new THREE.Group(); group.add(frame, pic); wallGroup.add(group);
-      o = { group, pic, frame, picMat, frameMat, picId: w.pic, hi: false };
+      o = { group, pic, frame, picMat, frameMat, key: wallKey(w), hi: false, slide: w.show ? { a: null, b: null, t: 0, fading: false, skip: false } : null };
       wallObjs.set(w.id, o);
     }
     placeWallObj(w, o);
@@ -878,16 +1006,25 @@ function setWallHighlight(ids) {
 }
 const saveWalls = () => store.set('walls', walls);
 const hangable = () => bgs.filter(b => b.tex && b.kind !== 'auto');
-function addWall(picId, yawDeg, pitchDeg) {
-  if (walls.length >= MAX_WALLS) { toast('You can hang up to ' + MAX_WALLS + ' pictures. Take one down first.'); return null; }
-  const b = bgById(picId); if (!b || !b.tex) return null;
+// Everything that can be hung: slideshows first, then single pictures. ref is 'show:<id>' or a picture id.
+const hangItems = () => [
+  ...shows.map(sh => ({ ref: 'show:' + sh.id, show: sh, name: 'Slideshow: ' + sh.name + ' (' + showPics(sh).length + ')', short: 'Slideshow: ' + sh.name })),
+  ...hangable().map(b => ({ ref: b.id, pic: b, name: b.name, short: b.name })),
+];
+const refName = (ref) => { const i = hangItems().find(x => x.ref === ref); return i ? i.name : 'picture'; };
+function addWall(ref, yawDeg, pitchDeg) {
+  if (walls.length >= MAX_WALLS) { toast('You can hang up to ' + MAX_WALLS + ' pictures and slideshows. Take one down first.'); return null; }
+  const isShow = typeof ref === 'string' && ref.startsWith('show:');
+  const sh = isShow ? showById(ref.slice(5)) : null, b = isShow ? null : bgById(ref);
+  if (isShow ? !sh : !(b && b.tex)) return null;
   const pitch = Math.round(clamp(pitchDeg, -30, 45));
   let yaw = Math.round(normDeg(yawDeg));
   for (const off of [0, 30, -30, 60, -60, 90, -90, 120, -120, 150, -150, 180]) {
     const y = Math.round(normDeg(yawDeg + off));
     if (!walls.some(w => Math.abs(normDeg(w.yaw - y)) < 24 && Math.abs(w.pitch - pitch) < 22)) { yaw = y; break; }
   }
-  const w = { id: 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), pic: picId, yaw, pitch, dist: 3, size: b.aspect >= 1.9 ? 2.6 : 1.4, turn: 0 };
+  const size = isShow ? (showAspect(sh) >= 1 ? 1.6 : 1.1) : (b.aspect >= 1.9 ? 2.6 : 1.4);
+  const w = { id: 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), ...(isShow ? { show: sh.id } : { pic: b.id }), yaw, pitch, dist: 3, size, turn: 0 };
   walls.push(w); saveWalls(); syncWallObjs(); renderWallList(); panelDirty = true;
   return w;
 }
@@ -901,19 +1038,25 @@ function updateWall(id, patch, opts = {}) {
 function removeWall(id) { walls = walls.filter(w => w.id !== id); saveWalls(); syncWallObjs(); renderWallList(); panelDirty = true; }
 function removeAllWalls() { if (!walls.length) return; walls = []; saveWalls(); syncWallObjs(); renderWallList(); panelDirty = true; toast('All pictures taken down.'); }
 function renderWallPick() {
-  const sel = $('wallPick'), prev = sel.value, list = hangable();
+  const sel = $('wallPick'), prev = sel.value, items = hangItems();
   sel.textContent = '';
-  for (const b of list) { const o = document.createElement('option'); o.value = b.id; o.textContent = b.name; sel.appendChild(o); }
-  if (list.some(b => b.id === prev)) sel.value = prev;
-  else { const mine = list.filter(b => b.kind !== 'builtin'); if (mine.length) sel.value = mine[mine.length - 1].id; }
-  $('wallAdd').disabled = !list.length;
-  if (vrPick >= list.length) vrPick = Math.max(0, list.length - 1);
+  for (const [label, list] of [['Slideshows', items.filter(i => i.show)], ['Pictures', items.filter(i => i.pic)]]) {
+    if (!list.length) continue;
+    const og = document.createElement('optgroup'); og.label = label;
+    for (const i of list) { const o = document.createElement('option'); o.value = i.ref; o.textContent = i.show ? i.show.name + ' (' + showPics(i.show).length + ')' : i.name; og.appendChild(o); }
+    sel.appendChild(og);
+  }
+  if (items.some(i => i.ref === prev)) sel.value = prev;
+  else { const mine = hangable().filter(b => b.kind !== 'builtin'); if (mine.length) sel.value = mine[mine.length - 1].id; }
+  $('wallAdd').disabled = !items.length;
+  if (vrPick >= items.length) vrPick = Math.max(0, items.length - 1);
 }
 function renderWallList() {
   const ul = $('wallList'); ul.textContent = '';
   if (!walls.length) { const li = document.createElement('li'); li.className = 'walls-empty'; li.textContent = 'No pictures hung yet.'; ul.appendChild(li); return; }
   for (const w of walls) {
-    const b = bgById(w.pic), name = b ? b.name : 'Loading picture…';
+    const sh = w.show ? showById(w.show) : null, b = sh ? showPics(sh)[0] : bgById(w.pic);
+    const name = sh ? 'Slideshow: ' + sh.name : b ? b.name : 'Loading picture…';
     const li = document.createElement('li'); li.className = 'wall';
     const head = document.createElement('div'); head.className = 'whead';
     const img = document.createElement(b && b.thumb ? 'img' : 'span'); img.className = 'wthumb';
@@ -941,6 +1084,134 @@ function syncWallInputs(w) {
   }
 }
 let vrPick = 0;
+
+const openPickers = new Set();
+function newShow(picIds = []) {
+  let n = shows.length + 1; while (shows.some(x => x.name === 'Slideshow ' + n)) n++;
+  const sh = { id: 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: 'Slideshow ' + n, pics: [...new Set(picIds)], interval: 8, shape: '3:2', fit: 'contain', order: 'seq' };
+  shows.push(sh); saveShows(); renderShows(); renderWallPick(); panelDirty = true;
+  return sh;
+}
+function addToShow(id, picIds) {
+  const sh = showById(id); if (!sh) return;
+  for (const p of picIds) if (!sh.pics.includes(p)) sh.pics.push(p);
+  saveShows(); renderShows(); renderWallPick(); renderWallList(); panelDirty = true;
+}
+function removeFromShow(id, picId) {
+  const sh = showById(id); if (!sh) return;
+  sh.pics = sh.pics.filter(p => p !== picId);
+  saveShows(); renderShows(); renderWallPick(); renderWallList(); panelDirty = true;
+}
+function updateShow(id, patch) {
+  const sh = showById(id); if (!sh) return;
+  Object.assign(sh, patch); saveShows();
+  if ('shape' in patch) for (const w of walls) if (w.show === id) { const o = wallObjs.get(w.id); if (o) placeWallObj(w, o); }
+  if ('name' in patch) { renderWallPick(); renderWallList(); }
+  panelDirty = true;
+}
+function deleteShow(id) {
+  shows = shows.filter(x => x.id !== id); openPickers.delete(id); saveShows();
+  if (walls.some(w => w.show === id)) { walls = walls.filter(w => w.show !== id); saveWalls(); syncWallObjs(); renderWallList(); }
+  renderShows(); renderWallPick(); panelDirty = true;
+}
+async function addFilesToShow(id, files) {
+  const added = await addImages(files, { show: id });
+  const sh = showById(id); if (!sh || !added.length) return;
+  addToShow(id, added.map(b => b.id));
+  toast(added.length + (added.length === 1 ? ' picture' : ' pictures') + ' added to ' + sh.name + '.');
+}
+function dropZone(el, onFiles) {
+  el.addEventListener('dragover', (e) => { if ([...e.dataTransfer.types].includes('Files')) { e.preventDefault(); e.stopPropagation(); el.classList.add('drop'); } });
+  el.addEventListener('dragleave', (e) => { if (!el.contains(e.relatedTarget)) el.classList.remove('drop'); });
+  el.addEventListener('drop', (e) => {
+    e.preventDefault(); e.stopPropagation(); el.classList.remove('drop');
+    const files = [...e.dataTransfer.files].filter(isImageFile);
+    if (files.length) onFiles(files); else toast('Drop picture files (JPG, PNG, WebP).');
+  });
+}
+function selectRow(id, label, value, options, onChange) {
+  const row = document.createElement('div'); row.className = 'row two';
+  const lab = document.createElement('label'); lab.htmlFor = id; lab.textContent = label;
+  const sel = document.createElement('select'); sel.id = id;
+  for (const [v, t] of options) { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.appendChild(o); }
+  sel.value = value; sel.addEventListener('change', () => onChange(sel.value));
+  row.append(lab, sel); return row;
+}
+function renderShows() {
+  const ul = $('showList'); ul.textContent = '';
+  if (!shows.length) { const li = document.createElement('li'); li.className = 'walls-empty'; li.textContent = 'No slideshows yet.'; ul.appendChild(li); return; }
+  const library = bgs.filter(b => (b.kind === 'user' || b.kind === 'bundled') && b.tex);
+  for (const sh of shows) {
+    const li = document.createElement('li'); li.className = 'show';
+    const pics = showPics(sh);
+    // name, count, delete (second click confirms)
+    const head = document.createElement('div'); head.className = 'shead';
+    const nm = document.createElement('input'); nm.className = 'sname'; nm.id = 'sn-' + sh.id; nm.value = sh.name; nm.setAttribute('aria-label', 'Slideshow name');
+    nm.addEventListener('input', () => { sh.name = nm.value.trim() || 'Slideshow'; saveShows(); });   // saved as you type
+    nm.addEventListener('change', () => { updateShow(sh.id, { name: nm.value.trim() || 'Slideshow' }); nm.value = sh.name; });
+    const cnt = document.createElement('span'); cnt.className = 'scount'; cnt.textContent = pics.length + (pics.length === 1 ? ' picture' : ' pictures');
+    const del = document.createElement('button'); del.type = 'button'; del.className = 'sdel'; del.textContent = 'Delete';
+    del.addEventListener('click', () => {
+      if (del.classList.contains('armed')) { deleteShow(sh.id); return; }
+      del.classList.add('armed'); del.textContent = 'Click again to delete';
+      setTimeout(() => { del.classList.remove('armed'); del.textContent = 'Delete'; }, 3000);
+    });
+    head.append(nm, cnt, del); li.appendChild(head);
+    // its pictures
+    const strip = document.createElement('div'); strip.className = 'sstrip';
+    if (!pics.length) { const e = document.createElement('div'); e.className = 'sempty'; e.textContent = 'Drop pictures here, or use Add pictures or Choose from library.'; strip.appendChild(e); }
+    for (const b of pics) {
+      const t = document.createElement('div'); t.className = 'sthumb'; t.title = b.name;
+      const img = document.createElement('img'); img.src = b.thumb; img.alt = '';
+      const x = document.createElement('button'); x.type = 'button'; x.className = 'x'; x.textContent = '×'; x.setAttribute('aria-label', 'Remove ' + b.name + ' from ' + sh.name);
+      x.addEventListener('click', () => removeFromShow(sh.id, b.id));
+      t.append(img, x); strip.appendChild(t);
+    }
+    li.appendChild(strip);
+    // settings
+    const opts = document.createElement('div'); opts.className = 'sopts';
+    const ir = document.createElement('div'); ir.className = 'row';
+    const il = document.createElement('label'); il.htmlFor = 'si-' + sh.id; il.textContent = 'Change every';
+    const ii = document.createElement('input'); ii.type = 'range'; ii.id = 'si-' + sh.id; ii.min = 3; ii.max = 60; ii.step = 1; ii.value = sh.interval;
+    const io = document.createElement('output'); io.textContent = sh.interval + ' s';
+    ii.addEventListener('input', () => { updateShow(sh.id, { interval: +ii.value }); io.textContent = ii.value + ' s'; });
+    ir.append(il, ii, io); opts.appendChild(ir);
+    opts.appendChild(selectRow('ss-' + sh.id, 'Frame', sh.shape, Object.entries(SHAPES).map(([k, v]) => [k, v[0]]), (v) => updateShow(sh.id, { shape: v })));
+    opts.appendChild(selectRow('sf-' + sh.id, 'Pictures', sh.fit, [['contain', 'Show whole picture'], ['cover', 'Fill the frame']], (v) => updateShow(sh.id, { fit: v })));
+    opts.appendChild(selectRow('so-' + sh.id, 'Order', sh.order, [['seq', 'In order'], ['shuffle', 'Shuffle']], (v) => updateShow(sh.id, { order: v })));
+    li.appendChild(opts);
+    // buttons
+    const btns = document.createElement('div'); btns.className = 'sbtns';
+    const addLab = document.createElement('label'); addLab.className = 'btn small'; addLab.tabIndex = 0; addLab.textContent = 'Add pictures';
+    const addIn = document.createElement('input'); addIn.type = 'file'; addIn.accept = 'image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.avif'; addIn.multiple = true; addIn.hidden = true; addIn.id = 'sa-' + sh.id;
+    addLab.htmlFor = addIn.id;
+    addIn.addEventListener('change', () => { const files = [...addIn.files].filter(isImageFile); addIn.value = ''; if (files.length) addFilesToShow(sh.id, files); });
+    addLab.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); addIn.click(); } });
+    const pickBtn = document.createElement('button'); pickBtn.type = 'button'; pickBtn.className = 'btn small';
+    pickBtn.textContent = openPickers.has(sh.id) ? 'Done choosing' : 'Choose from library';
+    pickBtn.disabled = !library.length;
+    pickBtn.addEventListener('click', () => { if (openPickers.has(sh.id)) openPickers.delete(sh.id); else openPickers.add(sh.id); renderShows(); });
+    const hang = document.createElement('button'); hang.type = 'button'; hang.className = 'btn small primary'; hang.textContent = 'Hang';
+    hang.addEventListener('click', () => { const w = addWall('show:' + sh.id, view.yaw * 180 / Math.PI, view.pitch * 180 / Math.PI); if (w) toast('Hung ' + sh.name + '. Adjust it under Pictures around you, or move it with the controller in VR.'); });
+    btns.append(addLab, addIn, pickBtn, hang); li.appendChild(btns);
+    // library picker: tap to put a picture in or take it out
+    if (openPickers.has(sh.id)) {
+      const grid = document.createElement('div'); grid.className = 'spick';
+      for (const b of library) {
+        const on = sh.pics.includes(b.id);
+        const bt = document.createElement('button'); bt.type = 'button'; bt.className = on ? 'on' : ''; bt.title = b.name;
+        bt.setAttribute('aria-pressed', on ? 'true' : 'false'); bt.setAttribute('aria-label', b.name);
+        const img = document.createElement('img'); img.src = b.thumb; img.alt = '';
+        bt.appendChild(img);
+        bt.addEventListener('click', () => { if (sh.pics.includes(b.id)) removeFromShow(sh.id, b.id); else addToShow(sh.id, [b.id]); });
+        grid.appendChild(bt);
+      }
+      li.appendChild(grid);
+    }
+    dropZone(li, (files) => addFilesToShow(sh.id, files));
+    ul.appendChild(li);
+  }
+}
 
 /* ---------- library ---------- */
 const videos = [{ id: 'demo', demo: true, name: 'Demo clip (green screen)', key: 'demo', size: 0, detected: { matte: 'color', keyColor: [0.2, 0.68, 0.34], tol: 0.12, soft: 0.07, spill: 0.14 }, hints: { proj: true, stereo: true }, source: demo }];
@@ -1288,14 +1559,16 @@ async function removeBg(b) {
   bgs.splice(i, 1); if (b.tex) b.tex.dispose(); if (b.url) URL.revokeObjectURL(b.url);
   await idb.del(b.id);
   if (walls.some(w => w.pic === b.id)) { walls = walls.filter(w => w.pic !== b.id); saveWalls(); syncWallObjs(); renderWallList(); }
-  renderWallPick(); schedulePhotoWall();
+  if (shows.some(sh => sh.pics.includes(b.id))) { for (const sh of shows) sh.pics = sh.pics.filter(p => p !== b.id); saveShows(); renderWallList(); }
+  renderShows(); renderWallPick(); schedulePhotoWall();
   if (S.bgId === b.id) setS({ bgId: wallPictures().length ? 'photowall' : 'dusk' }); else renderBgGrid();
 }
-async function addImages(files) {
+async function addImages(files, opts = {}) {
   let last = null, added = 0;
+  const list = [];
   for (const f of files) {
     const id = 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-    try { const b = await bgFromBlob(f, f.name.replace(/\.[^.]+$/, ''), id, 'user'); bgs.push(b); last = b; added++; await idb.put({ id, name: b.name, blob: f, added: Date.now() }); }
+    try { const b = await bgFromBlob(f, f.name.replace(/\.[^.]+$/, ''), id, 'user'); bgs.push(b); list.push(b); last = b; added++; await idb.put({ id, name: b.name, blob: f, added: Date.now() }); }
     catch (e) {
       toast(e && e.message === 'heic'
         ? f.name + ' is an iPhone HEIC photo, which the browser can’t open. Save it as JPG and add it again.'
@@ -1303,9 +1576,11 @@ async function addImages(files) {
     }
   }
   renderWallPick();
+  if (last && opts.show) { buildPhotoWall(); return list; }   // the caller adds them to its slideshow
   if (last) {
     $('wallPick').value = last.id;
     buildPhotoWall();
+    renderShows();
     // Switch to the photo wall while the backdrop is still one of the built-in ones.
     const cur = bgById(S.bgId);
     if (!cur || cur.kind === 'builtin') setS({ bgId: 'photowall' }); else renderBgGrid();
@@ -1313,6 +1588,7 @@ async function addImages(files) {
       ? (added === 1 ? 'Picture added to your photo wall.' : added + ' pictures added to your photo wall.')
       : (added === 1 ? 'Picture added: ' + last.name : added + ' pictures added'));
   } else renderBgGrid();
+  return list;
 }
 function addAny(files) {
   const imgs = files.filter(isImageFile), vids = files.filter(f => !isImageFile(f));
@@ -1339,10 +1615,19 @@ $('keyGreen').addEventListener('click', () => setS({ keyColor: KEY_PRESETS.green
 $('keyBlue').addEventListener('click', () => setS({ keyColor: KEY_PRESETS.blue.slice(), matte: 'color' }));
 for (const k of ['tol', 'soft', 'spill', 'maskCut', 'bgYaw', 'bgHeight', 'bgDim', 'bgSize']) $(k).addEventListener('input', (e) => setS({ [k]: +e.target.value }));
 $('wallAdd').addEventListener('click', () => {
-  const id = $('wallPick').value; if (!id) return;
-  const w = addWall(id, view.yaw * 180 / Math.PI, view.pitch * 180 / Math.PI);
-  if (w) toast('Hung ' + (bgById(id) || {}).name + '. Adjust it below, or move it with the controller in VR.');
+  const ref = $('wallPick').value; if (!ref) return;
+  const w = addWall(ref, view.yaw * 180 / Math.PI, view.pitch * 180 / Math.PI);
+  if (w) toast('Hung ' + refName(ref) + '. Adjust it below, or move it with the controller in VR.');
 });
+$('showNew').addEventListener('click', () => { const sh = newShow(); setTimeout(() => { const el = $('sn-' + sh.id); if (el) { el.focus(); el.select(); } }, 0); });
+// Dropping pictures on the Slideshows section (outside a slideshow) starts a new one with them.
+dropZone($('showsBox'), async (files) => {
+  const added = await addImages(files, { show: true });
+  if (added.length) { const sh = newShow(added.map(b => b.id)); toast(sh.name + ' made with ' + added.length + (added.length === 1 ? ' picture.' : ' pictures.')); }
+});
+// Dropping files anywhere else adds them like the Add buttons, instead of the browser opening them.
+window.addEventListener('dragover', (e) => { if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
+window.addEventListener('drop', (e) => { if (!e.dataTransfer || !e.dataTransfer.files.length) return; e.preventDefault(); addAny([...e.dataTransfer.files]); });
 $('bgMode').addEventListener('change', (e) => setS({ bgMode: e.target.value }));
 
 function togglePlay() { const s = current && current.source; if (!s) return; if (s.paused) s.play().catch(() => toast('Press play again to start the video.')); else s.pause(); syncPlayButton(); panelDirty = true; }
@@ -1381,7 +1666,7 @@ function resize() {
 new ResizeObserver(resize).observe($('screen'));
 
 /* ---------- VR menu (drawn on a canvas) ---------- */
-const PW = 1200, PH = 1060;
+const PW = 1200, PH = 1100;
 const pcanvas = document.createElement('canvas'); pcanvas.width = PW; pcanvas.height = PH;
 const pg = pcanvas.getContext('2d');
 const ptex = new THREE.CanvasTexture(pcanvas); ptex.colorSpace = THREE.SRGBColorSpace; ptex.anisotropy = Math.min(4, maxAniso);
@@ -1439,13 +1724,13 @@ function panelItems() {
   y += 94;
 
   Hd('PICTURES AROUND YOU', y); y += 18;
-  const list = hangable();
+  const list = hangItems();
   vrPick = clamp(vrPick, 0, Math.max(0, list.length - 1));
   const pic = list[vrPick];
   B('pprev', 40, y, 90, 60, '◀', () => { if (list.length) { vrPick = (vrPick - 1 + list.length) % list.length; panelDirty = true; } }, { fs: 30 });
-  it.push({ type: 'label', id: 'pname', x: 146, y, w: 420, h: 60, label: pic ? pic.name + '   (' + (vrPick + 1) + ' / ' + list.length + ')' : 'Add pictures on the page first' });
+  it.push({ type: 'label', id: 'pname', x: 146, y, w: 420, h: 60, label: pic ? (vrPick + 1) + '/' + list.length + '  ' + pic.short : 'Add pictures on the page first' });
   B('pnext', 582, y, 90, 60, '▶', () => { if (list.length) { vrPick = (vrPick + 1) % list.length; panelDirty = true; } }, { fs: 30 });
-  B('hang', 688, y, 220, 60, 'Hang here', () => { if (pic) hangInFront(pic.id); }, { disabled: !pic || walls.length >= MAX_WALLS });
+  B('hang', 688, y, 220, 60, 'Hang here', () => { if (pic) hangInFront(pic.ref); }, { disabled: !pic || walls.length >= MAX_WALLS });
   B('unhang', 924, y, 236, 60, 'Remove all', removeAllWalls, { disabled: !walls.length });
   y += 94;
 
@@ -1458,10 +1743,13 @@ function panelItems() {
   B('hide', 40, y, 552, 60, 'Hide menu', () => setMenu(false));
   B('exit', 608, y, 552, 60, 'Exit VR', () => { const s = renderer.xr.getSession(); if (s) s.end(); });
   y += 84;
-  it.push({ type: 'text', id: 'hint', x: 42, y, w: 1116, label: walls.length
-    ? 'To move a hung picture, point at it and hold the trigger. While holding: stick up/down = distance, left/right = size (also hold grip to turn it instead), A or X takes it down.'
-    : 'Hang a picture, then point at it and hold the trigger to move it around you.' });
-  panelUsedH = Math.min(PH, y + (walls.length ? 70 : 40));
+  const hint = walls.length
+    ? 'To move a hung picture or slideshow, point at it and hold the trigger. While holding: stick up/down = distance, left/right = size (also hold grip to turn it instead), A or X takes it down.'
+      + (walls.some(w => w.show) ? ' Point at a slideshow and press A or X to skip to its next picture.' : '')
+    : 'Hang a picture or slideshow, then point at it and hold the trigger to move it around you.';
+  it.push({ type: 'text', id: 'hint', x: 42, y, w: 1116, label: hint });
+  pg.font = '500 22px ' + FONT;
+  panelUsedH = Math.min(PH, y + wrapText(pg, hint, 1116).length * 30 + 12);
   return it;
 }
 function rr(g, x, y, w, h, r) { g.beginPath(); g.roundRect(x, y, w, h, r); }
@@ -1666,7 +1954,7 @@ function updateXR(now, dt) {
       if (st.wallDrag) {
         if (edge(4)) { const id = st.wallDrag.id; st.wallDrag = null; removeWall(id); }
       } else {
-        if (edge(4)) togglePlay();
+        if (edge(4)) { if (st.wallHover && isShowWall(st.wallHover)) skipSlide(st.wallHover); else togglePlay(); }
         if (Math.abs(ax) > 0.75 && now - st.lastSeek > 450) { seekBy(Math.sign(ax) * 10); st.lastSeek = now; }
       }
       if (edge(5)) setMenu(!menuOpen);
@@ -1720,10 +2008,11 @@ checkXR();
 /* ---------- loop ---------- */
 let lastT = performance.now(), lastUI = 0, lastPanel = 0;
 renderer.setAnimationLoop(() => {
-  const now = performance.now(), dt = Math.min(0.1, (now - lastT) / 1000); lastT = now;
+  const now = performance.now(), rawDt = (now - lastT) / 1000, dt = Math.min(0.1, rawDt); lastT = now;
   const src = current && current.source;
   if (src) src.update(dt, now);
   tickMaskWatch(now);
+  tickSlides(Math.min(1, rawDt));   // slideshows run on real time, even if frames drop
   if (renderer.xr.isPresenting) {
     updateXR(now, dt);
     if (menuOpen && (panelDirty || now - lastPanel > 500)) { drawPanel(hoveredSet()); lastPanel = now; panelDirty = false; }
@@ -1742,8 +2031,9 @@ async function boot() {
   for (const rec of saved) {
     try {
       bgs.push(await bgFromBlob(rec.blob, rec.name, rec.id, 'user'));
-      renderBgGrid(); renderWallPick(); schedulePhotoWall();
+      renderBgGrid(); renderWallPick();
       if (walls.some(w => w.pic === rec.id)) { syncWallObjs(); renderWallList(); }
+      if (shows.some(sh => sh.pics.includes(rec.id))) { renderShows(); renderWallList(); }
       if (rec.id === S.bgId) { apply(); syncControls(); panelDirty = true; }
     } catch (e) { }
   }
@@ -1755,19 +2045,22 @@ async function boot() {
     }
   } catch (e) { }
   if (!bgById(S.bgId)) S.bgId = 'dusk';
-  // Drop hung pictures whose picture no longer exists.
-  const before = walls.length; walls = walls.filter(w => bgById(w.pic)); if (walls.length !== before) saveWalls();
+  // Drop hung pictures and slideshow entries whose picture no longer exists.
+  const before = walls.length; walls = walls.filter(w => w.show ? !!showById(w.show) : bgById(w.pic)); if (walls.length !== before) saveWalls();
+  let pruned = false;
+  for (const sh of shows) { const n = sh.pics.length; sh.pics = sh.pics.filter(id => bgById(id)); if (sh.pics.length !== n) pruned = true; }
+  if (pruned) saveShows();
   buildPhotoWall();
-  renderBgGrid(); renderWallPick(); syncWallObjs(); renderWallList(); apply(); syncControls(); panelDirty = true;
+  renderBgGrid(); renderWallPick(); syncWallObjs(); renderWallList(); renderShows(); apply(); syncControls(); panelDirty = true;
 }
-renderBgGrid(); renderWallPick(); syncWallObjs(); renderWallList(); renderVideoList(); resize();
+renderBgGrid(); renderWallPick(); syncWallObjs(); renderWallList(); renderShows(); renderVideoList(); resize();
 selectVideo(0, false);
 demo.play();
 boot();
 if (document.fonts) document.fonts.ready.then(() => { panelDirty = true; });
 window.__greenroom = {
   S, videos, setS, autoKey, selectVideo, detectPacked, addWall, removeAllWalls, rayToYawPitch, raycaster, content, vidU, buildPhotoWall, photoWall,
-  get walls() { return walls; }, get maskWatch() { return maskWatch; },
+  get walls() { return walls; }, get maskWatch() { return maskWatch; }, get shows() { return shows; }, wallObjs, slideCache, newShow, addToShow, deleteShow, addImages, skipSlide,
   drawPanel: () => { drawPanel(new Set()); return pcanvas.toDataURL('image/png'); },
 };
 </script>
