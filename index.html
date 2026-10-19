@@ -121,6 +121,12 @@ h2{font-family:var(--display);font-weight:700;font-size:20px;letter-spacing:-.01
 .bgtile .thumb{display:block;width:100%;aspect-ratio:2/1;object-fit:cover;background:repeating-conic-gradient(var(--check-a) 0 25%,var(--check-b) 0 50%) 0 0/14px 14px}
 .bgtile .cap{display:block;padding:5px 7px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bgtile .x{position:absolute;top:4px;right:4px;background:rgba(10,12,15,.7);font-size:15px}
+.bgtile .badge{position:absolute;left:5px;top:5px;font:700 10px/1 var(--body);letter-spacing:.08em;background:rgba(10,12,15,.78);color:var(--fg);padding:4px 5px;border-radius:4px;pointer-events:none}
+.bgtile .snd{position:absolute;right:4px;bottom:30px;display:grid;place-items:center;width:26px;height:22px;padding:0;border-radius:5px;background:rgba(10,12,15,.8);color:#c9c5bd;border:1px solid transparent;cursor:pointer}
+.bgtile .snd.on{color:var(--key-hi);border-color:rgba(57,196,124,.5)}
+.bgtile.missing{border-style:dashed}
+.bgtile.missing .thumb{filter:grayscale(1) brightness(.55)}
+.sthumb.vid::after,.spick button.vid::before{content:"▶";position:absolute;left:4px;bottom:3px;font-size:11px;color:#fff;text-shadow:0 0 3px #000;z-index:1}
 
 /* How-to */
 .how{margin-top:40px;border-top:1px solid var(--line);padding-top:24px;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:28px}
@@ -282,7 +288,7 @@ h2{font-family:var(--display);font-weight:700;font-size:20px;letter-spacing:-.01
             <button id="showNew" class="btn small primary" type="button">New slideshow</button>
             <span class="fine" style="margin:0">or drop pictures here to start one</span>
           </div>
-          <p class="fine">A slideshow is a frame that cycles through its own pictures. Hang it and move it like any picture. A picture can be in several slideshows.</p>
+          <p class="fine">A slideshow is a frame that cycles through its own pictures and video clips. Hang it and move it like any picture. Video clips play to the end before it moves on, and a picture or clip can be in several slideshows.</p>
           <ul class="showlist" id="showList"></ul>
         </fieldset>
       </div>
@@ -296,10 +302,11 @@ h2{font-family:var(--display);font-weight:700;font-size:20px;letter-spacing:-.01
         <p class="fine">Videos play straight from this device's storage. Nothing is uploaded. Pictures picked here are added to Backdrops.</p>
       </section>
       <section>
-        <div class="bin-head"><h2>Backdrops</h2><label class="btn small" for="imageInput" tabindex="0">Add pictures</label></div>
-        <input id="imageInput" type="file" accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.avif" multiple hidden>
+        <div class="bin-head"><h2>Backdrops</h2><label class="btn small" for="imageInput" tabindex="0">Add pictures &amp; clips</label></div>
+        <input id="imageInput" type="file" accept="image/*,video/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.avif,.mp4,.m4v,.webm,.mov,.mkv" multiple hidden>
         <div class="bggrid" id="bgGrid"></div>
         <p class="fine">Photo wall arranges all your pictures to fill the see-through area, however many you add. Tap a single picture to use it alone instead: wide 2:1 panoramas wrap all the way around, other photos become one big wall. Pictures are kept in this browser, so they're here next time.</p>
+        <p class="fine">Videos added here are clips: use one as the backdrop, hang it, or put it in a slideshow. They play muted until you turn their sound on. Clips under 300 MB are kept in this browser; bigger ones keep their places until you add the same file again. To watch a video, use Add videos above.</p>
       </section>
     </aside>
   </div>
@@ -690,7 +697,7 @@ function averageColor(src) {
 }
 function thumbOf(src) {
   const c = document.createElement('canvas'); c.width = 320; c.height = 160;
-  const g = c.getContext('2d'); const sw = src.naturalWidth || src.width, sh = src.naturalHeight || src.height;
+  const g = c.getContext('2d'); const sw = src.videoWidth || src.naturalWidth || src.width, sh = src.videoHeight || src.naturalHeight || src.height;
   const s = Math.max(320 / sw, 160 / sh); g.drawImage(src, (320 - sw * s) / 2, (160 - sh * s) / 2, sw * s, sh * s);
   return c.toDataURL('image/jpeg', 0.8);
 }
@@ -774,13 +781,83 @@ bgs.push({ id: 'none', name: 'None', kind: 'builtin', tex: null, aspect: 2, avg:
 addBuiltinBg('dusk', 'Dusk ridge', makeDusk);
 addBuiltinBg('studio', 'Grey studio', makeStudio);
 
+/* ---------- video clips: short videos that go anywhere a picture can ---------- */
+const VID_EXT = /\.(mp4|m4v|webm|mov|mkv|ogv)$/i;
+const isVideoFile = (f) => (f.type && f.type.startsWith('video/')) || VID_EXT.test(f.name || '');
+const isMediaFile = (f) => isImageFile(f) || isVideoFile(f);
+const CLIP_SAVE_MAX = 300 * 1024 * 1024;
+const isClip = (b) => !!(b && b.media === 'video');
+let clipSound = store.get('clipSound', {}) || {};            // ids of clips whose sound is on
+// Clips over CLIP_SAVE_MAX aren't saved; a placeholder keeps their places until the same file is added again.
+let clipStubs = (store.get('clipStubs', []) || []).filter(x => x && x.id);
+const saveStubs = () => store.set('clipStubs', clipStubs);
+const stubById = (id) => clipStubs.find(x => x.id === id);
+function clipFromBlob(blob, name, id, opts = {}) {
+  return new Promise((resolve, reject) => {
+    const el = document.createElement('video');
+    el.muted = true; el.loop = true; el.playsInline = true; el.preload = 'auto'; el.setAttribute('playsinline', '');
+    const url = URL.createObjectURL(blob); el.src = url;
+    $('vbin').appendChild(el);
+    let done = false;
+    const fail = () => { if (done) return; done = true; el.removeAttribute('src'); el.load(); el.remove(); URL.revokeObjectURL(url); reject(new Error('video')); };
+    const timer = setTimeout(fail, 20000);
+    el.addEventListener('error', fail, { once: true });
+    el.addEventListener('loadeddata', () => {
+      const finish = () => {
+        if (done) return; done = true; clearTimeout(timer);
+        const tex = new THREE.VideoTexture(el);
+        tex.colorSpace = THREE.NoColorSpace; tex.generateMipmaps = false; tex.minFilter = THREE.LinearFilter; tex.magFilter = THREE.LinearFilter;
+        let thumb = null, avg = [0.1, 0.1, 0.1];
+        try { thumb = thumbOf(el); avg = averageColor(el); } catch (e) { }
+        el.pause(); el.currentTime = 0;
+        resolve({ id, name, kind: 'user', media: 'video', tex, el, url, aspect: (el.videoWidth || 16) / (el.videoHeight || 9), avg, thumb, muted: !clipSound[id], size: blob.size, saved: !!opts.saved, lastT: -1 });
+      };
+      // Thumbnail from a frame a little way in.
+      const t = isFinite(el.duration) ? Math.min(1, el.duration * 0.1) : 0;
+      if (t > 0.05) { el.addEventListener('seeked', finish, { once: true }); el.currentTime = t; setTimeout(finish, 4000); } else finish();
+    }, { once: true });
+  });
+}
+function toggleClipSound(id) {
+  const b = bgById(id); if (!isClip(b)) return;
+  b.muted = !b.muted; b.el.muted = b.muted;
+  if (b.muted) delete clipSound[id]; else { clipSound[id] = true; b.el.play().catch(() => { }); }
+  store.set('clipSound', clipSound);
+  renderBgGrid(); renderWallList(); panelDirty = true;
+  toast(b.name + (b.muted ? ': sound off' : ': sound on'));
+}
+function restartClip(b) { try { b.el.currentTime = 0; } catch (e) { } }
+// Only clips that are on show somewhere play; the rest stay paused so they don't use the video decoder.
+function tickClips() {
+  const used = new Set();
+  const bg = bgById(S.bgId); if (isClip(bg)) used.add(bg.id);
+  for (const w of walls) if (w.pic && wallObjs.has(w.id) && isClip(bgById(w.pic))) used.add(w.pic);
+  for (const o of wallObjs.values()) if (o.slide) for (const id of [o.slide.a, o.slide.b]) if (id && isClip(bgById(id))) used.add(id);
+  for (const b of bgs) {
+    if (!isClip(b)) continue;
+    const want = used.has(b.id);
+    if (b.el.muted !== b.muted) b.el.muted = b.muted;
+    if (want && b.el.paused) b.el.play().catch(() => { });
+    else if (!want && !b.el.paused) b.el.pause();
+    // Some browsers stop frame callbacks inside VR; upload new frames ourselves when the time moves.
+    if (want && b.el.readyState >= 2 && b.el.currentTime !== b.lastT) { b.lastT = b.el.currentTime; b.tex.needsUpdate = true; }
+  }
+}
+function forgetStub(id) {
+  clipStubs = clipStubs.filter(x => x.id !== id); saveStubs();
+  if (walls.some(w => w.pic === id)) { walls = walls.filter(w => w.pic !== id); saveWalls(); syncWallObjs(); }
+  if (shows.some(sh => sh.pics.includes(id))) { for (const sh of shows) sh.pics = sh.pics.filter(p => p !== id); saveShows(); }
+  delete clipSound[id]; store.set('clipSound', clipSound);
+  renderBgGrid(); renderWallList(); renderShows(); renderWallPick(); panelDirty = true;
+}
+
 /* ---------- photo wall: every picture you add, arranged to fill the view ---------- */
 const PW_SPAN = 200;     // degrees wide, enough for 180° and fisheye videos
 const PW_HALF_H = 52;    // degrees up and down from eye level
 const PW_ASPECT = (PW_SPAN * Math.PI / 180) / (2 * Math.tan(PW_HALF_H * Math.PI / 180));
 const photoWall = { id: 'photowall', name: 'Photo wall', kind: 'auto', tex: null, aspect: PW_ASPECT, avg: [0.06, 0.065, 0.075], thumb: null, cyl: true, count: 0 };
 bgs.push(photoWall);
-const wallPictures = () => bgs.filter(b => (b.kind === 'user' || b.kind === 'bundled') && b.tex && b.tex.image);
+const wallPictures = () => bgs.filter(b => (b.kind === 'user' || b.kind === 'bundled') && b.tex && b.tex.image && !isClip(b));
 // Justified rows: pick the row count whose natural height is closest to the space available.
 function justifiedRows(aspects, W, H, gap) {
   const N = aspects.length, total = aspects.reduce((a, b) => a + b, 0);
@@ -873,6 +950,8 @@ const showAspect = (sh) => (SHAPES[sh && sh.shape] || SHAPES['3:2'])[1];
 // Slides use their own smaller textures (only the current and next are kept), so long slideshows stay light on the Quest.
 const slideCache = new Map();
 function slideTex(picId) {
+  const cb = bgById(picId);
+  if (isClip(cb)) { restartClip(cb); return cb.tex; }   // clips use their own live video texture, from the start
   let e = slideCache.get(picId);
   if (!e) {
     const b = bgById(picId); if (!b || !b.tex || !b.tex.image) return null;
@@ -885,7 +964,7 @@ function slideTex(picId) {
   e.refs++;
   return e.tex;
 }
-function releaseSlide(picId) { const e = picId && slideCache.get(picId); if (!e) return; if (--e.refs <= 0) { e.tex.dispose(); slideCache.delete(picId); } }
+function releaseSlide(picId) { if (isClip(bgById(picId))) return; const e = picId && slideCache.get(picId); if (!e) return; if (--e.refs <= 0) { e.tex.dispose(); slideCache.delete(picId); } }
 const SLIDE_FS = `precision highp float;
 uniform sampler2D uA; uniform sampler2D uB; uniform bool uHasA; uniform bool uHasB;
 uniform vec2 uAS; uniform vec2 uBS; uniform float uMix; uniform float uDim; uniform vec3 uMat;
@@ -941,8 +1020,16 @@ function tickSlides(dt) {
       }
     } else if (pics.length > 1) {
       sl.t += dt;
-      if (sl.t >= sh.interval || sl.skip) {
-        sl.skip = false;
+      const ca = bgById(sl.a);
+      let due = sl.t >= sh.interval;
+      if (isClip(ca) && isFinite(ca.el.duration) && ca.el.duration > 0) {
+        // Video clips play to the end (or until they loop round), then the slideshow moves on.
+        const ct = ca.el.currentTime;
+        due = ct >= ca.el.duration - SLIDE_FADE - 0.05 || (sl.lastCT !== undefined && ct < sl.lastCT - 0.5);
+        sl.lastCT = ct;
+      }
+      if (due || sl.skip) {
+        sl.skip = false; sl.lastCT = undefined;
         const to = nextSlideId(sh, pics, sl.a);
         sl.b = to; u.uB.value = slideTex(to); u.uHasB.value = !!u.uB.value; u.uBS.value.set(...slideScale(to, sh));
         u.uMix.value = 0; sl.fading = true; sl.t = 0;
@@ -1009,7 +1096,7 @@ const hangable = () => bgs.filter(b => b.tex && b.kind !== 'auto');
 // Everything that can be hung: slideshows first, then single pictures. ref is 'show:<id>' or a picture id.
 const hangItems = () => [
   ...shows.map(sh => ({ ref: 'show:' + sh.id, show: sh, name: 'Slideshow: ' + sh.name + ' (' + showPics(sh).length + ')', short: 'Slideshow: ' + sh.name })),
-  ...hangable().map(b => ({ ref: b.id, pic: b, name: b.name, short: b.name })),
+  ...hangable().map(b => ({ ref: b.id, pic: b, name: b.name + (isClip(b) ? ' (video)' : ''), short: b.name + (isClip(b) ? ' (video)' : '') })),
 ];
 const refName = (ref) => { const i = hangItems().find(x => x.ref === ref); return i ? i.name : 'picture'; };
 function addWall(ref, yawDeg, pitchDeg) {
@@ -1040,10 +1127,10 @@ function removeAllWalls() { if (!walls.length) return; walls = []; saveWalls(); 
 function renderWallPick() {
   const sel = $('wallPick'), prev = sel.value, items = hangItems();
   sel.textContent = '';
-  for (const [label, list] of [['Slideshows', items.filter(i => i.show)], ['Pictures', items.filter(i => i.pic)]]) {
+  for (const [label, list] of [['Slideshows', items.filter(i => i.show)], ['Video clips', items.filter(i => i.pic && isClip(i.pic))], ['Pictures', items.filter(i => i.pic && !isClip(i.pic))]]) {
     if (!list.length) continue;
     const og = document.createElement('optgroup'); og.label = label;
-    for (const i of list) { const o = document.createElement('option'); o.value = i.ref; o.textContent = i.show ? i.show.name + ' (' + showPics(i.show).length + ')' : i.name; og.appendChild(o); }
+    for (const i of list) { const o = document.createElement('option'); o.value = i.ref; o.textContent = i.show ? i.show.name + ' (' + showPics(i.show).length + ')' : i.pic.name; og.appendChild(o); }
     sel.appendChild(og);
   }
   if (items.some(i => i.ref === prev)) sel.value = prev;
@@ -1055,16 +1142,25 @@ function renderWallList() {
   const ul = $('wallList'); ul.textContent = '';
   if (!walls.length) { const li = document.createElement('li'); li.className = 'walls-empty'; li.textContent = 'No pictures hung yet.'; ul.appendChild(li); return; }
   for (const w of walls) {
-    const sh = w.show ? showById(w.show) : null, b = sh ? showPics(sh)[0] : bgById(w.pic);
-    const name = sh ? 'Slideshow: ' + sh.name : b ? b.name : 'Loading picture…';
+    const sh = w.show ? showById(w.show) : null, b = sh ? showPics(sh)[0] : bgById(w.pic), stub = !sh && !b ? stubById(w.pic) : null;
+    const name = sh ? 'Slideshow: ' + sh.name : b ? b.name + (isClip(b) ? ' (video)' : '') : stub ? stub.name + ' (add the video again to see it)' : 'Loading picture…';
     const li = document.createElement('li'); li.className = 'wall';
     const head = document.createElement('div'); head.className = 'whead';
-    const img = document.createElement(b && b.thumb ? 'img' : 'span'); img.className = 'wthumb';
-    if (b && b.thumb) { img.src = b.thumb; img.alt = ''; }
+    const img = document.createElement((b && b.thumb) || (stub && stub.thumb) ? 'img' : 'span'); img.className = 'wthumb';
+    if (b && b.thumb) { img.src = b.thumb; img.alt = ''; } else if (stub && stub.thumb) img.alt = '';
     const nm = document.createElement('span'); nm.className = 'wname'; nm.textContent = name; nm.title = name;
     const x = document.createElement('button'); x.className = 'x'; x.type = 'button'; x.textContent = '×'; x.setAttribute('aria-label', 'Take down ' + name);
     x.addEventListener('click', () => removeWall(w.id));
-    head.append(img, nm, x); li.appendChild(head);
+    head.append(img, nm, x);
+    if (!sh && isClip(b)) {
+      const snd = document.createElement('button'); snd.type = 'button'; snd.className = 'btn small ghost';
+      snd.textContent = b.muted ? 'Sound off' : 'Sound on'; snd.setAttribute('aria-pressed', b.muted ? 'false' : 'true');
+      snd.addEventListener('click', () => toggleClipSound(b.id));
+      head.insertBefore(snd, x);
+      head.style.gridTemplateColumns = '64px minmax(0,1fr) auto auto';
+    }
+    if (stub && stub.thumb) { img.src = stub.thumb; }
+    li.appendChild(head);
     for (const f of WALL_FIELDS) {
       const row = document.createElement('div'); row.className = 'row';
       const id = 'w-' + w.id + '-' + f.k;
@@ -1118,15 +1214,15 @@ async function addFilesToShow(id, files) {
   const added = await addImages(files, { show: id });
   const sh = showById(id); if (!sh || !added.length) return;
   addToShow(id, added.map(b => b.id));
-  toast(added.length + (added.length === 1 ? ' picture' : ' pictures') + ' added to ' + sh.name + '.');
+  toast(added.length + (added.length === 1 ? ' item' : ' items') + ' added to ' + sh.name + '.');
 }
-function dropZone(el, onFiles) {
+function dropZone(el, onFiles, accept = isMediaFile) {
   el.addEventListener('dragover', (e) => { if ([...e.dataTransfer.types].includes('Files')) { e.preventDefault(); e.stopPropagation(); el.classList.add('drop'); } });
   el.addEventListener('dragleave', (e) => { if (!el.contains(e.relatedTarget)) el.classList.remove('drop'); });
   el.addEventListener('drop', (e) => {
     e.preventDefault(); e.stopPropagation(); el.classList.remove('drop');
-    const files = [...e.dataTransfer.files].filter(isImageFile);
-    if (files.length) onFiles(files); else toast('Drop picture files (JPG, PNG, WebP).');
+    const files = [...e.dataTransfer.files].filter(accept);
+    if (files.length) onFiles(files); else toast('Drop pictures (JPG, PNG, WebP) or video clips (MP4, WebM).');
   });
 }
 function selectRow(id, label, value, options, onChange) {
@@ -1149,7 +1245,9 @@ function renderShows() {
     const nm = document.createElement('input'); nm.className = 'sname'; nm.id = 'sn-' + sh.id; nm.value = sh.name; nm.setAttribute('aria-label', 'Slideshow name');
     nm.addEventListener('input', () => { sh.name = nm.value.trim() || 'Slideshow'; saveShows(); });   // saved as you type
     nm.addEventListener('change', () => { updateShow(sh.id, { name: nm.value.trim() || 'Slideshow' }); nm.value = sh.name; });
-    const cnt = document.createElement('span'); cnt.className = 'scount'; cnt.textContent = pics.length + (pics.length === 1 ? ' picture' : ' pictures');
+    const nClips = pics.filter(isClip).length, nPics = pics.length - nClips;
+    const cnt = document.createElement('span'); cnt.className = 'scount';
+    cnt.textContent = [nPics ? nPics + (nPics === 1 ? ' picture' : ' pictures') : '', nClips ? nClips + (nClips === 1 ? ' clip' : ' clips') : ''].filter(Boolean).join(', ') || 'Empty';
     const del = document.createElement('button'); del.type = 'button'; del.className = 'sdel'; del.textContent = 'Delete';
     del.addEventListener('click', () => {
       if (del.classList.contains('armed')) { deleteShow(sh.id); return; }
@@ -1159,9 +1257,9 @@ function renderShows() {
     head.append(nm, cnt, del); li.appendChild(head);
     // its pictures
     const strip = document.createElement('div'); strip.className = 'sstrip';
-    if (!pics.length) { const e = document.createElement('div'); e.className = 'sempty'; e.textContent = 'Drop pictures here, or use Add pictures or Choose from library.'; strip.appendChild(e); }
+    if (!pics.length) { const e = document.createElement('div'); e.className = 'sempty'; e.textContent = 'Drop pictures or video clips here, or use the buttons below.'; strip.appendChild(e); }
     for (const b of pics) {
-      const t = document.createElement('div'); t.className = 'sthumb'; t.title = b.name;
+      const t = document.createElement('div'); t.className = 'sthumb' + (isClip(b) ? ' vid' : ''); t.title = b.name;
       const img = document.createElement('img'); img.src = b.thumb; img.alt = '';
       const x = document.createElement('button'); x.type = 'button'; x.className = 'x'; x.textContent = '×'; x.setAttribute('aria-label', 'Remove ' + b.name + ' from ' + sh.name);
       x.addEventListener('click', () => removeFromShow(sh.id, b.id));
@@ -1182,10 +1280,10 @@ function renderShows() {
     li.appendChild(opts);
     // buttons
     const btns = document.createElement('div'); btns.className = 'sbtns';
-    const addLab = document.createElement('label'); addLab.className = 'btn small'; addLab.tabIndex = 0; addLab.textContent = 'Add pictures';
-    const addIn = document.createElement('input'); addIn.type = 'file'; addIn.accept = 'image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.avif'; addIn.multiple = true; addIn.hidden = true; addIn.id = 'sa-' + sh.id;
+    const addLab = document.createElement('label'); addLab.className = 'btn small'; addLab.tabIndex = 0; addLab.textContent = 'Add pictures or clips';
+    const addIn = document.createElement('input'); addIn.type = 'file'; addIn.accept = 'image/*,video/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.avif,.mp4,.m4v,.webm,.mov,.mkv'; addIn.multiple = true; addIn.hidden = true; addIn.id = 'sa-' + sh.id;
     addLab.htmlFor = addIn.id;
-    addIn.addEventListener('change', () => { const files = [...addIn.files].filter(isImageFile); addIn.value = ''; if (files.length) addFilesToShow(sh.id, files); });
+    addIn.addEventListener('change', () => { const files = [...addIn.files].filter(isMediaFile); addIn.value = ''; if (files.length) addFilesToShow(sh.id, files); });
     addLab.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); addIn.click(); } });
     const pickBtn = document.createElement('button'); pickBtn.type = 'button'; pickBtn.className = 'btn small';
     pickBtn.textContent = openPickers.has(sh.id) ? 'Done choosing' : 'Choose from library';
@@ -1199,7 +1297,7 @@ function renderShows() {
       const grid = document.createElement('div'); grid.className = 'spick';
       for (const b of library) {
         const on = sh.pics.includes(b.id);
-        const bt = document.createElement('button'); bt.type = 'button'; bt.className = on ? 'on' : ''; bt.title = b.name;
+        const bt = document.createElement('button'); bt.type = 'button'; bt.className = (on ? 'on' : '') + (isClip(b) ? ' vid' : ''); bt.title = b.name;
         bt.setAttribute('aria-pressed', on ? 'true' : 'false'); bt.setAttribute('aria-label', b.name);
         const img = document.createElement('img'); img.src = b.thumb; img.alt = '';
         bt.appendChild(img);
@@ -1543,6 +1641,17 @@ function renderBgGrid() {
     if (b.thumb) { img.src = b.thumb; img.alt = ''; }
     const cap = document.createElement('span'); cap.className = 'cap'; cap.textContent = b.name; cap.title = b.name;
     t.append(img, cap);
+    if (isClip(b)) {
+      const badge = document.createElement('span'); badge.className = 'badge'; badge.textContent = 'VIDEO';
+      const snd = document.createElement('button'); snd.type = 'button'; snd.className = 'snd' + (b.muted ? '' : ' on');
+      snd.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M3 9h4l5-4v14l-5-4H3z" fill="currentColor"/>'
+        + (b.muted ? '<path d="M16 9.5l5 5M21 9.5l-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>'
+                   : '<path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>') + '</svg>';
+      snd.title = b.muted ? 'Sound off. Click to turn it on.' : 'Sound on. Click to turn it off.';
+      snd.setAttribute('aria-pressed', b.muted ? 'false' : 'true'); snd.setAttribute('aria-label', 'Sound for ' + b.name);
+      snd.addEventListener('click', (e) => { e.stopPropagation(); toggleClipSound(b.id); });
+      t.append(badge, snd);
+    }
     if (b.kind === 'user') {
       const x = document.createElement('button'); x.className = 'x'; x.type = 'button'; x.textContent = '×'; x.setAttribute('aria-label', 'Remove ' + b.name);
       x.addEventListener('click', (e) => { e.stopPropagation(); removeBg(b); });
@@ -1553,10 +1662,30 @@ function renderBgGrid() {
     t.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } });
     grid.appendChild(t);
   }
+  // Big clips that aren't saved: a placeholder until the same file is added again.
+  for (const st of clipStubs) {
+    if (bgById(st.id)) continue;
+    const t = document.createElement('div'); t.className = 'bgtile missing'; t.tabIndex = 0; t.setAttribute('role', 'button');
+    t.setAttribute('aria-label', st.name + ': add this video again'); t.title = 'Over 300 MB, so not saved. Add the same file again to bring it back.';
+    const img = document.createElement(st.thumb ? 'img' : 'span'); img.className = 'thumb'; if (st.thumb) { img.src = st.thumb; img.alt = ''; }
+    const cap = document.createElement('span'); cap.className = 'cap'; cap.textContent = 'Add again · ' + st.name; cap.title = st.name;
+    const badge = document.createElement('span'); badge.className = 'badge'; badge.textContent = 'VIDEO';
+    const x = document.createElement('button'); x.className = 'x'; x.type = 'button'; x.textContent = '×'; x.setAttribute('aria-label', 'Forget ' + st.name);
+    x.addEventListener('click', (e) => { e.stopPropagation(); forgetStub(st.id); });
+    t.append(img, cap, badge, x);
+    t.addEventListener('click', () => $('imageInput').click());
+    t.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('imageInput').click(); } });
+    grid.appendChild(t);
+  }
 }
 async function removeBg(b) {
   const i = bgs.indexOf(b); if (i < 0) return;
   bgs.splice(i, 1); if (b.tex) b.tex.dispose(); if (b.url) URL.revokeObjectURL(b.url);
+  if (isClip(b)) {
+    b.el.pause(); b.el.removeAttribute('src'); b.el.load(); b.el.remove();
+    delete clipSound[b.id]; store.set('clipSound', clipSound);
+    if (stubById(b.id)) { clipStubs = clipStubs.filter(x => x.id !== b.id); saveStubs(); }
+  }
   await idb.del(b.id);
   if (walls.some(w => w.pic === b.id)) { walls = walls.filter(w => w.pic !== b.id); saveWalls(); syncWallObjs(); renderWallList(); }
   if (shows.some(sh => sh.pics.includes(b.id))) { for (const sh of shows) sh.pics = sh.pics.filter(p => p !== b.id); saveShows(); renderWallList(); }
@@ -1564,11 +1693,32 @@ async function removeBg(b) {
   if (S.bgId === b.id) setS({ bgId: wallPictures().length ? 'photowall' : 'dusk' }); else renderBgGrid();
 }
 async function addImages(files, opts = {}) {
-  let last = null, added = 0;
-  const list = [];
+  let last = null, added = 0, clips = 0, back = 0;
+  const list = [], big = [];
   for (const f of files) {
+    if (isVideoFile(f)) {
+      const name = f.name.replace(/\.[^.]+$/, '');
+      // Same file as a placeholder? Reuse its id so its frames and slideshow spots come back.
+      const stub = clipStubs.find(x => x.name === name && x.size === f.size);
+      const id = stub ? stub.id : 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      if (bgById(id)) continue;
+      try {
+        const saveIt = f.size <= CLIP_SAVE_MAX;
+        const b = await clipFromBlob(f, name, id, { saved: saveIt });
+        bgs.push(b); list.push(b); last = b; added++; clips++; if (stub) back++;
+        renderBgGrid();   // show each one as it arrives
+        if (saveIt) {
+          await idb.put({ id, name, blob: f, added: Date.now(), media: 'video' });
+          if (stub) { clipStubs = clipStubs.filter(x => x.id !== id); saveStubs(); }
+        } else {
+          if (!stub) { clipStubs.push({ id, name, size: f.size, thumb: b.thumb }); saveStubs(); }
+          big.push(name);
+        }
+      } catch (e) { toast('Couldn’t play ' + f.name + ' here. MP4 (H.264) or WebM works best.', 6000); }
+      continue;
+    }
     const id = 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-    try { const b = await bgFromBlob(f, f.name.replace(/\.[^.]+$/, ''), id, 'user'); bgs.push(b); list.push(b); last = b; added++; await idb.put({ id, name: b.name, blob: f, added: Date.now() }); }
+    try { const b = await bgFromBlob(f, f.name.replace(/\.[^.]+$/, ''), id, 'user'); bgs.push(b); list.push(b); last = b; added++; renderBgGrid(); await idb.put({ id, name: b.name, blob: f, added: Date.now() }); }
     catch (e) {
       toast(e && e.message === 'heic'
         ? f.name + ' is an iPhone HEIC photo, which the browser can’t open. Save it as JPG and add it again.'
@@ -1576,7 +1726,15 @@ async function addImages(files, opts = {}) {
     }
   }
   renderWallPick();
-  if (last && opts.show) { buildPhotoWall(); return list; }   // the caller adds them to its slideshow
+  if (back) { syncWallObjs(); renderWallList(); renderShows(); }
+  if (big.length) setTimeout(() => toast((big.length === 1 ? big[0] + ' is' : big.length + ' clips are') + ' over 300 MB, so not saved in the browser. Their places are kept: add the same file again next time.', 7000), 3400);
+  if (last && opts.show) { if (added > clips) buildPhotoWall(); else renderBgGrid(); return list; }   // the caller adds them to its slideshow
+  if (last && added === clips) {
+    renderBgGrid(); renderShows();
+    toast(back ? (back === 1 ? last.name + ' is back in its places.' : back + ' clips are back in their places.')
+      : (clips === 1 ? 'Video clip added. Tap it to make it the backdrop, hang it, or put it in a slideshow.' : clips + ' video clips added.'));
+    return list;
+  }
   if (last) {
     $('wallPick').value = last.id;
     buildPhotoWall();
@@ -1598,7 +1756,12 @@ function addAny(files) {
 
 // wire 2D controls
 $('videoInput').addEventListener('change', (e) => { addAny([...e.target.files]); e.target.value = ''; });
-$('imageInput').addEventListener('change', (e) => { addAny([...e.target.files]); e.target.value = ''; });
+$('imageInput').addEventListener('change', (e) => {
+  const files = [...e.target.files]; e.target.value = '';
+  const media = files.filter(isMediaFile);
+  if (media.length) addImages(media);
+  if (media.length < files.length) toast('Some files weren’t pictures or videos and were skipped.');
+});
 for (const id of ['videoInput', 'imageInput']) {
   const lab = document.querySelector(`label[for="${id}"]`);
   lab.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $(id).click(); } });
@@ -1620,6 +1783,8 @@ $('wallAdd').addEventListener('click', () => {
   if (w) toast('Hung ' + refName(ref) + '. Adjust it below, or move it with the controller in VR.');
 });
 $('showNew').addEventListener('click', () => { const sh = newShow(); setTimeout(() => { const el = $('sn-' + sh.id); if (el) { el.focus(); el.select(); } }, 0); });
+// Dropping pictures or clips on the Backdrops list adds them to the library.
+dropZone($('bgGrid').closest('section'), (files) => addImages(files));
 // Dropping pictures on the Slideshows section (outside a slideshow) starts a new one with them.
 dropZone($('showsBox'), async (files) => {
   const added = await addImages(files, { show: true });
@@ -1666,7 +1831,7 @@ function resize() {
 new ResizeObserver(resize).observe($('screen'));
 
 /* ---------- VR menu (drawn on a canvas) ---------- */
-const PW = 1200, PH = 1100;
+const PW = 1200, PH = 1140;
 const pcanvas = document.createElement('canvas'); pcanvas.width = PW; pcanvas.height = PH;
 const pg = pcanvas.getContext('2d');
 const ptex = new THREE.CanvasTexture(pcanvas); ptex.colorSpace = THREE.SRGBColorSpace; ptex.anisotropy = Math.min(4, maxAniso);
@@ -1744,8 +1909,9 @@ function panelItems() {
   B('exit', 608, y, 552, 60, 'Exit VR', () => { const s = renderer.xr.getSession(); if (s) s.end(); });
   y += 84;
   const hint = walls.length
-    ? 'To move a hung picture or slideshow, point at it and hold the trigger. While holding: stick up/down = distance, left/right = size (also hold grip to turn it instead), A or X takes it down.'
-      + (walls.some(w => w.show) ? ' Point at a slideshow and press A or X to skip to its next picture.' : '')
+    ? 'Move a hung item: point at it and hold the trigger. While holding: stick up/down = distance, left/right = size (with grip: turn), A or X = take it down.'
+      + (walls.some(w => w.show) ? ' A or X on a slideshow skips ahead.' : '')
+      + (walls.some(w => isClip(bgById(w.pic))) ? ' A or X on a video turns its sound on or off.' : '')
     : 'Hang a picture or slideshow, then point at it and hold the trigger to move it around you.';
   it.push({ type: 'text', id: 'hint', x: 42, y, w: 1116, label: hint });
   pg.font = '500 22px ' + FONT;
@@ -1954,7 +2120,12 @@ function updateXR(now, dt) {
       if (st.wallDrag) {
         if (edge(4)) { const id = st.wallDrag.id; st.wallDrag = null; removeWall(id); }
       } else {
-        if (edge(4)) { if (st.wallHover && isShowWall(st.wallHover)) skipSlide(st.wallHover); else togglePlay(); }
+        if (edge(4)) {
+          const hw = st.wallHover && walls.find(x => x.id === st.wallHover);
+          if (hw && hw.show) skipSlide(hw.id);
+          else if (hw && isClip(bgById(hw.pic))) toggleClipSound(hw.pic);
+          else togglePlay();
+        }
         if (Math.abs(ax) > 0.75 && now - st.lastSeek > 450) { seekBy(Math.sign(ax) * 10); st.lastSeek = now; }
       }
       if (edge(5)) setMenu(!menuOpen);
@@ -2013,6 +2184,7 @@ renderer.setAnimationLoop(() => {
   if (src) src.update(dt, now);
   tickMaskWatch(now);
   tickSlides(Math.min(1, rawDt));   // slideshows run on real time, even if frames drop
+  tickClips();
   if (renderer.xr.isPresenting) {
     updateXR(now, dt);
     if (menuOpen && (panelDirty || now - lastPanel > 500)) { drawPanel(hoveredSet()); lastPanel = now; panelDirty = false; }
@@ -2030,7 +2202,7 @@ async function boot() {
   saved.sort((a, b) => (a.added || 0) - (b.added || 0));
   for (const rec of saved) {
     try {
-      bgs.push(await bgFromBlob(rec.blob, rec.name, rec.id, 'user'));
+      bgs.push(rec.media === 'video' ? await clipFromBlob(rec.blob, rec.name, rec.id, { saved: true }) : await bgFromBlob(rec.blob, rec.name, rec.id, 'user'));
       renderBgGrid(); renderWallPick();
       if (walls.some(w => w.pic === rec.id)) { syncWallObjs(); renderWallList(); }
       if (shows.some(sh => sh.pics.includes(rec.id))) { renderShows(); renderWallList(); }
@@ -2046,9 +2218,10 @@ async function boot() {
   } catch (e) { }
   if (!bgById(S.bgId)) S.bgId = 'dusk';
   // Drop hung pictures and slideshow entries whose picture no longer exists.
-  const before = walls.length; walls = walls.filter(w => w.show ? !!showById(w.show) : bgById(w.pic)); if (walls.length !== before) saveWalls();
+  // (Placeholders for big unsaved clips keep their spots.)
+  const before = walls.length; walls = walls.filter(w => w.show ? !!showById(w.show) : (bgById(w.pic) || stubById(w.pic))); if (walls.length !== before) saveWalls();
   let pruned = false;
-  for (const sh of shows) { const n = sh.pics.length; sh.pics = sh.pics.filter(id => bgById(id)); if (sh.pics.length !== n) pruned = true; }
+  for (const sh of shows) { const n = sh.pics.length; sh.pics = sh.pics.filter(id => bgById(id) || stubById(id)); if (sh.pics.length !== n) pruned = true; }
   if (pruned) saveShows();
   buildPhotoWall();
   renderBgGrid(); renderWallPick(); syncWallObjs(); renderWallList(); renderShows(); apply(); syncControls(); panelDirty = true;
@@ -2060,7 +2233,7 @@ boot();
 if (document.fonts) document.fonts.ready.then(() => { panelDirty = true; });
 window.__greenroom = {
   S, videos, setS, autoKey, selectVideo, detectPacked, addWall, removeAllWalls, rayToYawPitch, raycaster, content, vidU, buildPhotoWall, photoWall,
-  get walls() { return walls; }, get maskWatch() { return maskWatch; }, get shows() { return shows; }, wallObjs, slideCache, newShow, addToShow, deleteShow, addImages, skipSlide,
+  get walls() { return walls; }, get maskWatch() { return maskWatch; }, get shows() { return shows; }, wallObjs, slideCache, newShow, addToShow, deleteShow, addImages, skipSlide, toggleClipSound, get clipStubs() { return clipStubs; }, bgs,
   drawPanel: () => { drawPanel(new Set()); return pcanvas.toDataURL('image/png'); },
 };
 </script>
