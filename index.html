@@ -162,6 +162,8 @@ h2{font-family:var(--display);font-weight:700;font-size:20px;letter-spacing:-.01
 .show{border:1px solid var(--line);border-radius:12px;background:var(--panel-2);padding:12px;min-width:0}
 .drop{outline:2px dashed var(--key);outline-offset:3px}
 .shead{display:flex;align-items:center;gap:10px}
+.linkrow{display:flex;gap:8px;margin-top:4px}
+.linkrow input{flex:1 1 auto;min-width:0;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:7px 9px}
 .sname{flex:1 1 auto;min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-weight:600}
 .scount{color:var(--muted);font-size:13px;white-space:nowrap}
 .sdel{background:none;border:1px solid transparent;color:var(--muted);border-radius:7px;padding:5px 9px;cursor:pointer;font-weight:600;font-size:13px;white-space:nowrap}
@@ -314,6 +316,15 @@ h2{font-family:var(--display);font-weight:700;font-size:20px;letter-spacing:-.01
         <div class="bggrid" id="bgGrid"></div>
         <p class="fine">Photo wall arranges all your pictures to fill the see-through area, however many you add. Tap a single picture to use it alone instead: wide 2:1 panoramas wrap all the way around, other photos become one big wall. Pictures are kept in this browser, so they're here next time.</p>
         <p class="fine">Videos added here are clips: use one as the backdrop, hang it, or put it in a slideshow. They play muted until you turn their sound on. Clips under 300 MB are kept in this browser; bigger ones keep their places until you add the same file again. To watch a video, use Add videos above.</p>
+      </section>
+      <section id="webBox">
+        <div class="bin-head"><h2>From the web</h2><button id="shareBtn" class="btn small primary" type="button">Share a tab</button></div>
+        <p class="fine" id="shareNote" style="margin-top:0">Put a browser tab on a wall in VR, live: YouTube, or any site you're logged in to. Start the video in that tab, come back here, click Share a tab and pick it. Turn on <b>Also share tab audio</b> to hear it through Greenroom. Press fullscreen on the video in that tab to show only the video. Streaming services with copy protection (Netflix and the like) show up black.</p>
+        <form id="linkForm" class="linkrow" style="margin-top:14px" novalidate>
+          <input id="linkUrl" type="url" inputmode="url" placeholder="https://…/video.mp4" aria-label="Video link" required>
+          <button class="btn small" type="submit">Add link</button>
+        </form>
+        <p class="fine">A direct link to a video file (.mp4, .webm, or an .m3u8 stream) becomes a clip you can hang. Links to pages, like a YouTube page, don't work here, and nor do videos behind a login: share the tab instead.</p>
       </section>
     </aside>
   </div>
@@ -800,18 +811,26 @@ let clipSound = store.get('clipSound', {}) || {};            // ids of clips who
 let clipVol = store.get('clipVol', {}) || {};                // id -> volume 0..1 (default 1)
 // Clips over CLIP_SAVE_MAX aren't saved; a placeholder keeps their places until the same file is added again.
 let clipStubs = (store.get('clipStubs', []) || []).filter(x => x && x.id);
-const saveStubs = () => store.set('clipStubs', clipStubs);
+// Link placeholders aren't saved: the link list itself is, and brings them back.
+const saveStubs = () => store.set('clipStubs', clipStubs.filter(x => !x.link));
 const stubById = (id) => clipStubs.find(x => x.id === id);
-function clipFromBlob(blob, name, id, opts = {}) {
+// A clip from any source. attach(el, ctx, fail) points the <video> at it (a file, a link, a shared tab);
+// anything it puts on ctx (an hls player, say) ends up on the clip.
+function makeClip(name, id, attach, fields = {}, opt = {}) {
   return new Promise((resolve, reject) => {
     const el = document.createElement('video');
-    el.muted = true; el.loop = true; el.playsInline = true; el.preload = 'auto'; el.setAttribute('playsinline', '');
-    const url = URL.createObjectURL(blob); el.src = url;
+    el.muted = true; el.loop = !opt.live; el.playsInline = true; el.preload = 'auto'; el.setAttribute('playsinline', '');
     $('vbin').appendChild(el);
+    const ctx = {};
     let done = false;
-    const fail = () => { if (done) return; done = true; el.removeAttribute('src'); el.load(); el.remove(); URL.revokeObjectURL(url); reject(new Error('video')); };
-    const timer = setTimeout(fail, 20000);
-    el.addEventListener('error', fail, { once: true });
+    const fail = (err) => {
+      if (done) return; done = true; clearTimeout(timer);
+      if (ctx.hls) ctx.hls.destroy();
+      el.srcObject = null; el.removeAttribute('src'); el.load(); el.remove();
+      reject(err instanceof Error ? err : new Error('video'));
+    };
+    const timer = setTimeout(() => fail(new Error('timeout')), opt.timeout || 20000);
+    el.addEventListener('error', () => fail(), { once: true });
     el.addEventListener('loadeddata', () => {
       const finish = () => {
         if (done) return; done = true; clearTimeout(timer);
@@ -819,14 +838,178 @@ function clipFromBlob(blob, name, id, opts = {}) {
         tex.colorSpace = THREE.NoColorSpace; tex.generateMipmaps = false; tex.minFilter = THREE.LinearFilter; tex.magFilter = THREE.LinearFilter;
         let thumb = null, avg = [0.1, 0.1, 0.1];
         try { thumb = thumbOf(el); avg = averageColor(el); } catch (e) { }
-        el.pause(); el.currentTime = 0;
-        resolve({ id, name, kind: 'user', media: 'video', tex, el, url, aspect: (el.videoWidth || 16) / (el.videoHeight || 9), avg, thumb, muted: !clipSound[id], vol: clamp(clipVol[id] ?? 1, 0, 1), size: blob.size, saved: !!opts.saved, lastT: -1 });
+        if (!opt.live) { el.pause(); try { el.currentTime = 0; } catch (e) { } }
+        resolve({ id, name, kind: 'user', media: 'video', tex, el, url: null, aspect: (el.videoWidth || 16) / (el.videoHeight || 9), avg, thumb, muted: !clipSound[id], vol: clamp(clipVol[id] ?? 1, 0, 1), size: 0, saved: false, lastT: -1, ...fields, ...ctx });
       };
-      // Thumbnail from a frame a little way in.
+      // Thumbnail from a frame a little way in (live shares have no length, so the first frame).
       const t = isFinite(el.duration) ? Math.min(1, el.duration * 0.1) : 0;
       if (t > 0.05) { el.addEventListener('seeked', finish, { once: true }); el.currentTime = t; setTimeout(finish, 4000); } else finish();
     }, { once: true });
+    Promise.resolve().then(() => attach(el, ctx, fail)).catch(fail);
   });
+}
+function clipFromBlob(blob, name, id, opts = {}) {
+  const url = URL.createObjectURL(blob);
+  return makeClip(name, id, (el) => { el.src = url; }, { url, size: blob.size, saved: !!opts.saved })
+    .catch((e) => { URL.revokeObjectURL(url); throw e; });
+}
+// Stop a clip for good: its decoder, its share or stream, its texture.
+function disposeClip(b) {
+  const el = b.el; el.pause();
+  if (b.stream) for (const t of b.stream.getTracks()) t.stop();
+  if (b.hls) { try { b.hls.destroy(); } catch (e) { } }
+  el.srcObject = null; el.removeAttribute('src'); el.load(); el.remove();
+  if (b.tex) b.tex.dispose();
+  if (b.url) URL.revokeObjectURL(b.url);
+}
+
+/* ---------- video links: a direct link to a video file or stream ---------- */
+const HLS_URL = 'https://cdn.jsdelivr.net/npm/hls.js@1.6.19/dist/hls.mjs';
+const isHlsUrl = (u) => /\.m3u8(\?|#|$)/i.test(u);
+let links = (store.get('links', []) || []).filter(x => x && x.id && x.url);   // [{id, name, url}]
+const saveLinks = () => store.set('links', links);
+function clipFromLink(url, name, id) {
+  return makeClip(name, id, async (el, ctx, fail) => {
+    el.crossOrigin = 'anonymous';   // needed to draw it in 3D; the site has to allow it
+    if (isHlsUrl(url) && !el.canPlayType('application/vnd.apple.mpegurl')) {
+      const { default: Hls } = await import(HLS_URL);
+      if (!Hls.isSupported()) throw new Error('hls');
+      const hls = ctx.hls = new Hls({ maxBufferLength: 30 });
+      hls.on(Hls.Events.ERROR, (_, d) => { if (d && d.fatal) fail(new Error('hls')); });
+      hls.loadSource(url); hls.attachMedia(el);
+    } else el.src = url;
+  }, { link: url, saved: true }, { timeout: 30000 });
+}
+function linkName(url) {
+  try {
+    const u = new URL(url), last = decodeURIComponent(u.pathname.split('/').filter(Boolean).pop() || '');
+    const n = last.replace(/\.(mp4|m4v|webm|mov|mkv|ogv|m3u8)$/i, '').replace(/[_+]+/g, ' ').trim();
+    return (n && !/^(index|master|playlist|manifest)$/i.test(n) ? n : u.hostname.replace(/^www\./, '')).slice(0, 60);
+  } catch (e) { return 'Video link'; }
+}
+const PAGE_HOSTS = /(^|\.)(youtube\.com|youtu\.be|vimeo\.com|twitch\.tv|netflix\.com|dailymotion\.com|facebook\.com|instagram\.com|tiktok\.com|x\.com|twitter\.com|reddit\.com)$/i;
+// Work out why a link didn't load, to say something useful.
+async function whyLinkFailed(url) {
+  try { if (PAGE_HOSTS.test(new URL(url).hostname)) return 'page'; } catch (e) { return 'bad'; }
+  if (isHlsUrl(url)) return 'stream';
+  const plays = await new Promise((res) => {
+    const v = document.createElement('video'); v.muted = true; v.preload = 'metadata';
+    const end = (r) => { clearTimeout(t); v.removeAttribute('src'); v.load(); res(r); };
+    const t = setTimeout(() => end(false), 12000);
+    v.onloadedmetadata = () => end(true); v.onerror = () => end(false); v.src = url;
+  });
+  return plays ? 'blocked' : 'notvideo';
+}
+const LINK_WHY = {
+  bad: 'That doesn’t look like a web link. Paste the full address, starting with https://',
+  page: 'That’s a link to a web page, not to a video file.',
+  stream: 'Couldn’t play that stream. The site may not let other pages play it.',
+  blocked: 'That video plays, but its site doesn’t let other pages show it in VR.',
+  notvideo: 'Couldn’t play that link. It has to be a direct link to a video file, and one that doesn’t need a login.',
+};
+async function addLink(raw) {
+  let url = (raw || '').trim();
+  if (url && !/^[a-z][a-z0-9+.-]*:/i.test(url)) url = 'https://' + url;
+  let ok = false;
+  try { const u = new URL(url); ok = /^https?:$/.test(u.protocol) && /^[a-z0-9.-]+$/i.test(u.hostname) && (u.hostname.includes('.') || u.hostname === 'localhost') && !/\s/.test(url); } catch (e) { }
+  if (!ok) { toast(LINK_WHY.bad, 5000); return null; }
+  if (location.protocol === 'https:' && url.startsWith('http:')) { toast('That link starts with http:, which this https page isn’t allowed to play. Try the https:// version.', 6000); return null; }
+  if (PAGE_HOSTS.test(new URL(url).hostname)) { toast(LINK_WHY.page + (SHARE_OK ? ' Open it in another tab and use Share a tab instead.' : ''), 8000); return null; }
+  const have = links.find(l => l.url === url);
+  if (have && bgById(have.id)) { toast(have.name + ' is already in your backdrops.'); return null; }
+  const id = have ? have.id : 'l' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name = have ? have.name : linkName(url);
+  clipSound[id] = true; store.set('clipSound', clipSound);   // links are for watching: sound on
+  toast('Loading ' + name + '…', 30000);
+  try {
+    const b = await clipFromLink(url, name, id);
+    bgs.push(b);
+    if (!have) { links.push({ id, name, url }); saveLinks(); }
+    clipStubs = clipStubs.filter(x => x.id !== id); saveStubs();
+    const placed = walls.some(w => w.pic === id);
+    syncWallObjs(); renderBgGrid(); renderWallPick(); renderShows(); renderWallList(); panelDirty = true;
+    if (!placed) hangInFront(id);
+    toast(placed ? name + ' is back in its place.' : name + ' is hung where you’re looking. Move it under Pictures around you, or with the controller in VR.', 6000);
+    return b;
+  } catch (e) {
+    if (!have) { delete clipSound[id]; store.set('clipSound', clipSound); }
+    const why = await whyLinkFailed(url);
+    toast(LINK_WHY[why] + (why !== 'bad' && SHARE_OK ? ' Open it in another tab and use Share a tab instead.' : ''), 8000);
+    return null;
+  }
+}
+// A saved link that didn't load this time keeps its places as a placeholder you can retry.
+async function retryLink(id) {
+  const L = links.find(l => l.id === id); if (!L) return;
+  toast('Loading ' + L.name + '…', 30000);
+  try {
+    const b = await clipFromLink(L.url, L.name, L.id);
+    bgs.push(b); clipStubs = clipStubs.filter(x => x.id !== id); saveStubs();
+    syncWallObjs(); renderBgGrid(); renderWallPick(); renderShows(); renderWallList(); panelDirty = true;
+    if (S.bgId === id) apply();
+    toast(L.name + ' is back.');
+  } catch (e) { toast('Still can’t load ' + L.name + '. The site may be down, or the link has changed.', 6000); }
+}
+
+/* ---------- shared tabs: a live browser tab or window, as a clip ---------- */
+const SHARE_OK = !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
+// Shares take the first free slot (live1, live2, …), so a new share goes back where the last one hung.
+function freeLiveId() { for (let n = 1; ; n++) if (!bgById('live' + n)) return 'live' + n; }
+async function startShare() {
+  if (!SHARE_OK) { toast('Sharing a tab works in Chrome or Edge on a computer.', 5000); return null; }
+  // Stay on this page after picking a tab, instead of jumping to the shared one.
+  let controller = null, focusSet = false;
+  if (window.CaptureController) { controller = new CaptureController(); try { controller.setFocusBehavior('no-focus-change'); focusSet = true; } catch (e) { } }
+  const req = {
+    video: { frameRate: { ideal: 60 } },
+    audio: { suppressLocalAudioPlayback: true },   // its sound plays here instead, so Greenroom's volume works on it
+    selfBrowserSurface: 'exclude', surfaceSwitching: 'include', systemAudio: 'include',
+  };
+  if (controller) req.controller = controller;
+  let stream;
+  try { stream = await navigator.mediaDevices.getDisplayMedia(req); }
+  catch (e) { if (!(e && (e.name === 'NotAllowedError' || e.name === 'AbortError'))) toast('Couldn’t start sharing' + (e && e.message ? ': ' + e.message : '.'), 6000); return null; }
+  if (controller && !focusSet) { try { controller.setFocusBehavior('no-focus-change'); } catch (e) { } }
+  const vt = stream.getVideoTracks()[0];
+  if (!vt) { for (const t of stream.getTracks()) t.stop(); return null; }
+  const surf = (vt.getSettings && vt.getSettings().displaySurface) || 'browser';
+  const id = freeLiveId(), n = +id.slice(4);
+  const name = (surf === 'monitor' ? 'Shared screen' : surf === 'window' ? 'Shared window' : 'Shared tab') + (n > 1 ? ' ' + n : '');
+  const hasAudio = stream.getAudioTracks().length > 0;
+  let b;
+  try { b = await makeClip(name, id, (el) => { el.srcObject = stream; el.play().catch(() => { }); }, { kind: 'live', live: true, stream, hasAudio }, { live: true, timeout: 15000 }); }
+  catch (e) { for (const t of stream.getTracks()) t.stop(); toast('Couldn’t show that share here.', 5000); return null; }
+  b.muted = !hasAudio; b.el.muted = b.muted;
+  bgs.push(b);
+  const stub = stubById(id);
+  if (stub) Object.assign(stub, { name, thumb: b.thumb }); else clipStubs.push({ id, name, live: true, thumb: b.thumb });
+  saveStubs();
+  vt.addEventListener('ended', () => endShare(id));
+  b.el.addEventListener('resize', () => shareResized(b));
+  const placed = walls.some(w => w.pic === id) || S.bgId === id;
+  syncWallObjs(); renderBgGrid(); renderWallPick(); renderWallList(); panelDirty = true;
+  if (S.bgId === id) apply();
+  if (!placed) hangInFront(id);
+  toast((placed ? name + ' is back in its place. ' : name + ' is hung where you’re looking. ')
+    + (hasAudio ? 'Its sound plays through Greenroom now, so Greenroom’s volume controls work on it.'
+      : 'No sound was shared, so it plays from that tab as usual. To control it here, share again with the audio switch on.'), 7000);
+  return b;
+}
+// Sharing stopped (Stop sharing, or the tab closed): its places stay, ready for the next share.
+function endShare(id) {
+  const b = bgById(id); if (!b || !b.live) return;
+  bgs.splice(bgs.indexOf(b), 1); disposeClip(b);
+  if (!walls.some(w => w.pic === id)) { clipStubs = clipStubs.filter(x => x.id !== id); saveStubs(); }
+  syncWallObjs(); renderBgGrid(); renderWallPick(); renderWallList(); panelDirty = true;
+  if (S.bgId === id) apply();
+  toast(b.name + ' stopped. Share a tab again to put one back in its place.');
+}
+// The shared window was resized, or the share switched to another tab: follow its shape.
+function shareResized(b) {
+  const a = (b.el.videoWidth || 16) / (b.el.videoHeight || 9);
+  if (Math.abs(a - b.aspect) < 0.005) return;
+  b.aspect = a;
+  for (const w of walls) if (w.pic === b.id) { const o = wallObjs.get(w.id); if (o) placeWallObj(w, o); }
+  if (S.bgId === b.id) apply();
 }
 function toggleClipSound(id) {
   const b = bgById(id); if (!isClip(b)) return;
@@ -884,6 +1067,7 @@ function tickClips() {
     const want = used.has(b.id);
     if (b.el.muted !== b.muted) b.el.muted = b.muted;
     if (Math.abs(b.el.volume - b.vol) > 0.001) b.el.volume = b.vol;
+    if (b.live && want && b.el.videoWidth) shareResized(b);   // a shared window can change shape at any time
     if (want && b.el.paused) b.el.play().catch(() => { });
     else if (!want && !b.el.paused) b.el.pause();
     // Some browsers stop frame callbacks inside VR; upload new frames ourselves when the time moves.
@@ -896,6 +1080,7 @@ function forgetStub(id) {
   if (shows.some(sh => sh.pics.includes(id))) { for (const sh of shows) sh.pics = sh.pics.filter(p => p !== id); saveShows(); }
   delete clipSound[id]; store.set('clipSound', clipSound);
   delete clipVol[id]; store.set('clipVol', clipVol);
+  if (links.some(l => l.id === id)) { links = links.filter(l => l.id !== id); saveLinks(); }
   renderBgGrid(); renderWallList(); renderShows(); renderWallPick(); panelDirty = true;
 }
 
@@ -1144,7 +1329,7 @@ const hangable = () => bgs.filter(b => b.tex && b.kind !== 'auto');
 // Everything that can be hung: slideshows first, then single pictures. ref is 'show:<id>' or a picture id.
 const hangItems = () => [
   ...shows.map(sh => ({ ref: 'show:' + sh.id, show: sh, name: 'Slideshow: ' + sh.name + ' (' + showPics(sh).length + ')', short: 'Slideshow: ' + sh.name })),
-  ...hangable().map(b => ({ ref: b.id, pic: b, name: b.name + (isClip(b) ? ' (video)' : ''), short: b.name + (isClip(b) ? ' (video)' : '') })),
+  ...hangable().map(b => { const tag = b.live ? ' (live)' : isClip(b) ? ' (video)' : ''; return { ref: b.id, pic: b, name: b.name + tag, short: b.name + tag }; }),
 ];
 const refName = (ref) => { const i = hangItems().find(x => x.ref === ref); return i ? i.name : 'picture'; };
 function addWall(ref, yawDeg, pitchDeg) {
@@ -1158,8 +1343,10 @@ function addWall(ref, yawDeg, pitchDeg) {
     const y = Math.round(normDeg(yawDeg + off));
     if (!walls.some(w => Math.abs(normDeg(w.yaw - y)) < 24 && Math.abs(w.pitch - pitch) < 22)) { yaw = y; break; }
   }
-  const size = isShow ? (showAspect(sh) >= 1 ? 1.6 : 1.1) : (b.aspect >= 1.9 ? 2.6 : 1.4);
-  const w = { id: 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), ...(isShow ? { show: sh.id } : { pic: b.id }), yaw, pitch, dist: 3, size, turn: 0 };
+  // Shared tabs and links are for watching, so they start out TV-sized and a bit closer.
+  const screen = !isShow && !!(b.live || b.link);
+  const size = isShow ? (showAspect(sh) >= 1 ? 1.6 : 1.1) : screen ? 2.4 : (b.aspect >= 1.9 ? 2.6 : 1.4);
+  const w = { id: 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), ...(isShow ? { show: sh.id } : { pic: b.id }), yaw, pitch, dist: screen ? 2.8 : 3, size, turn: 0 };
   walls.push(w); saveWalls(); syncWallObjs(); renderWallList(); panelDirty = true;
   return w;
 }
@@ -1191,7 +1378,8 @@ function renderWallList() {
   if (!walls.length) { const li = document.createElement('li'); li.className = 'walls-empty'; li.textContent = 'No pictures hung yet.'; ul.appendChild(li); return; }
   for (const w of walls) {
     const sh = w.show ? showById(w.show) : null, b = sh ? showPics(sh)[0] : bgById(w.pic), stub = !sh && !b ? stubById(w.pic) : null;
-    const name = sh ? 'Slideshow: ' + sh.name : b ? b.name + (isClip(b) ? ' (video)' : '') : stub ? stub.name + ' (add the video again to see it)' : 'Loading picture…';
+    const name = sh ? 'Slideshow: ' + sh.name : b ? b.name + (b.live ? ' (live)' : isClip(b) ? ' (video)' : '')
+      : stub ? stub.name + (stub.live ? ' (share again to see it)' : stub.link ? ' (link isn’t loading)' : ' (add the video again to see it)') : 'Loading picture…';
     const li = document.createElement('li'); li.className = 'wall';
     const head = document.createElement('div'); head.className = 'whead';
     const img = document.createElement((b && b.thumb) || (stub && stub.thumb) ? 'img' : 'span'); img.className = 'wthumb';
@@ -1712,7 +1900,7 @@ function renderBgGrid() {
     const cap = document.createElement('span'); cap.className = 'cap'; cap.textContent = b.name; cap.title = b.name;
     t.append(img, cap);
     if (isClip(b)) {
-      const badge = document.createElement('span'); badge.className = 'badge'; badge.textContent = 'VIDEO';
+      const badge = document.createElement('span'); badge.className = 'badge'; badge.textContent = b.live ? 'LIVE' : b.link ? 'LINK' : 'VIDEO';
       const snd = document.createElement('button'); snd.type = 'button'; snd.className = 'snd' + (b.muted ? '' : ' on');
       snd.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M3 9h4l5-4v14l-5-4H3z" fill="currentColor"/>'
         + (b.muted ? '<path d="M16 9.5l5 5M21 9.5l-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>'
@@ -1722,8 +1910,9 @@ function renderBgGrid() {
       snd.addEventListener('click', (e) => { e.stopPropagation(); toggleClipSound(b.id); });
       t.append(badge, snd);
     }
-    if (b.kind === 'user') {
-      const x = document.createElement('button'); x.className = 'x'; x.type = 'button'; x.textContent = '×'; x.setAttribute('aria-label', 'Remove ' + b.name);
+    if (b.kind === 'user' || b.live) {
+      const x = document.createElement('button'); x.className = 'x'; x.type = 'button'; x.textContent = '×'; x.setAttribute('aria-label', (b.live ? 'Stop sharing ' : 'Remove ') + b.name);
+      if (b.live) x.title = 'Stop sharing and take it down';
       x.addEventListener('click', (e) => { e.stopPropagation(); removeBg(b); });
       t.appendChild(x);
     }
@@ -1735,24 +1924,30 @@ function renderBgGrid() {
   // Big clips that aren't saved: a placeholder until the same file is added again.
   for (const st of clipStubs) {
     if (bgById(st.id)) continue;
+    // Kinds: a big clip (add the file again), a shared tab (share again), a link that didn't load (retry).
+    const k = st.live ? { verb: 'Share again', tip: 'Shares stop when the page reloads or you stop sharing. Share a tab again to fill this spot.', badge: 'LIVE', go: () => startShare() }
+      : st.link ? { verb: 'Retry', tip: 'This link didn’t load. Click to try again.', badge: 'LINK', go: () => retryLink(st.id) }
+      : { verb: 'Add again', tip: 'Over 300 MB, so not saved. Add the same file again to bring it back.', badge: 'VIDEO', go: () => $('imageInput').click() };
     const t = document.createElement('div'); t.className = 'bgtile missing'; t.tabIndex = 0; t.setAttribute('role', 'button');
-    t.setAttribute('aria-label', st.name + ': add this video again'); t.title = 'Over 300 MB, so not saved. Add the same file again to bring it back.';
+    t.setAttribute('aria-label', st.name + ': ' + k.verb.toLowerCase()); t.title = k.tip;
     const img = document.createElement(st.thumb ? 'img' : 'span'); img.className = 'thumb'; if (st.thumb) { img.src = st.thumb; img.alt = ''; }
-    const cap = document.createElement('span'); cap.className = 'cap'; cap.textContent = 'Add again · ' + st.name; cap.title = st.name;
-    const badge = document.createElement('span'); badge.className = 'badge'; badge.textContent = 'VIDEO';
+    const cap = document.createElement('span'); cap.className = 'cap'; cap.textContent = k.verb + ' · ' + st.name; cap.title = st.name;
+    const badge = document.createElement('span'); badge.className = 'badge'; badge.textContent = k.badge;
     const x = document.createElement('button'); x.className = 'x'; x.type = 'button'; x.textContent = '×'; x.setAttribute('aria-label', 'Forget ' + st.name);
     x.addEventListener('click', (e) => { e.stopPropagation(); forgetStub(st.id); });
     t.append(img, cap, badge, x);
-    t.addEventListener('click', () => $('imageInput').click());
-    t.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('imageInput').click(); } });
+    t.addEventListener('click', k.go);
+    t.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); k.go(); } });
     grid.appendChild(t);
   }
 }
 async function removeBg(b) {
   const i = bgs.indexOf(b); if (i < 0) return;
-  bgs.splice(i, 1); if (b.tex) b.tex.dispose(); if (b.url) URL.revokeObjectURL(b.url);
+  bgs.splice(i, 1);
+  if (isClip(b)) disposeClip(b);
+  else { if (b.tex) b.tex.dispose(); if (b.url) URL.revokeObjectURL(b.url); }
+  if (b.link) { links = links.filter(l => l.id !== b.id); saveLinks(); }
   if (isClip(b)) {
-    b.el.pause(); b.el.removeAttribute('src'); b.el.load(); b.el.remove();
     delete clipSound[b.id]; store.set('clipSound', clipSound);
     delete clipVol[b.id]; store.set('clipVol', clipVol);
     if (stubById(b.id)) { clipStubs = clipStubs.filter(x => x.id !== b.id); saveStubs(); }
@@ -1869,6 +2064,17 @@ $('bgMode').addEventListener('change', (e) => setS({ bgMode: e.target.value }));
 function togglePlay() { const s = current && current.source; if (!s) return; if (s.paused) s.play().catch(() => toast('Press play again to start the video.')); else s.pause(); syncPlayButton(); panelDirty = true; }
 function seekBy(d) { const s = current && current.source; if (s) { s.seek(s.time + d); panelDirty = true; } }
 $('playBtn').addEventListener('click', togglePlay);
+$('shareBtn').addEventListener('click', () => startShare());
+if (!SHARE_OK) {
+  $('shareBtn').hidden = true;
+  $('shareNote').textContent = 'You can also put a live browser tab on a wall (YouTube, or sites you’re logged in to): open this page in Chrome or Edge on a computer and use Share a tab there. This browser can’t share tabs.';
+}
+$('linkForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const inp = $('linkUrl'), btn = e.target.querySelector('button');
+  btn.disabled = true;
+  try { if (await addLink(inp.value)) inp.value = ''; } finally { btn.disabled = false; }
+});
 $('vol').addEventListener('input', (e) => setS({ volume: +e.target.value }));
 $('back30').addEventListener('click', () => seekBy(-30));
 $('fwd30').addEventListener('click', () => seekBy(30));
@@ -1993,7 +2199,7 @@ function panelItems() {
   const it = [], src = current && current.source;
   const B = (id, x, y, w, h, label, act, o = {}) => it.push({ type: 'btn', id, x, y, w, h, label, act, ...o });
   const Hd = (label, y) => it.push({ type: 'heading', id: 'h-' + label, x: 42, y, label });
-  it.push({ type: 'slider', compact: true, id: 's-volume', x: 490, y: 28, w: 330, h: 56, tx: 540, tw: 204, min: 0, max: 1, key: 'volume', fmt: v => Math.round(v * 100) + '%' });
+  it.push({ type: 'slider', compact: true, id: 's-volume', x: 490, y: 28, w: 330, h: 56, tx: 540, tw: 192, min: 0, max: 1, key: 'volume', fmt: v => Math.round(v * 100) + '%' });
   it.push({ type: 'seek', id: 'seek', x: 40, y: 98, w: 1120, h: 52 });
   B('prev', 40, 166, 180, 80, '◀◀  Prev', () => stepVideo(-1));
   B('b30', 236, 166, 180, 80, '−30 s', () => seekBy(-30));
@@ -2377,10 +2583,22 @@ async function boot() {
       try { const b = await (await fetch('backgrounds/' + encodeURIComponent(f))).blob(); bgs.push(await bgFromBlob(b, f.replace(/\.[^.]+$/, ''), 'b:' + f, 'bundled')); } catch (e) { }
     }
   } catch (e) { }
+  // Saved video links, all at once; one that doesn't load keeps its places as a placeholder to retry.
+  await Promise.all(links.map(async (L) => {
+    try {
+      bgs.push(await clipFromLink(L.url, L.name, L.id));
+      renderBgGrid(); renderWallPick();
+      if (walls.some(w => w.pic === L.id)) { syncWallObjs(); renderWallList(); }
+      if (L.id === S.bgId) { apply(); syncControls(); panelDirty = true; }
+    }
+    catch (e) { if (!stubById(L.id)) clipStubs.push({ id: L.id, name: L.name, link: L.url }); }
+  }));
   if (!bgById(S.bgId)) S.bgId = 'dusk';
   // Drop hung pictures and slideshow entries whose picture no longer exists.
-  // (Placeholders for big unsaved clips keep their spots.)
+  // (Placeholders for big unsaved clips, shared tabs and links keep their spots.)
   const before = walls.length; walls = walls.filter(w => w.show ? !!showById(w.show) : (bgById(w.pic) || stubById(w.pic))); if (walls.length !== before) saveWalls();
+  // A shared tab's placeholder only stays while something is hung there.
+  const nStubs = clipStubs.length; clipStubs = clipStubs.filter(x => !x.live || walls.some(w => w.pic === x.id)); if (clipStubs.length !== nStubs) saveStubs();
   let pruned = false;
   for (const sh of shows) { const n = sh.pics.length; sh.pics = sh.pics.filter(id => bgById(id) || stubById(id)); if (sh.pics.length !== n) pruned = true; }
   if (pruned) saveShows();
@@ -2396,6 +2614,7 @@ window.__greenroom = {
   S, videos, setS, autoKey, selectVideo, detectPacked, addWall, removeAllWalls, rayToYawPitch, raycaster, content, vidU, buildPhotoWall, photoWall,
   get walls() { return walls; }, get maskWatch() { return maskWatch; }, get shows() { return shows; }, wallObjs, slideCache, newShow, addToShow, deleteShow, addImages, skipSlide, toggleClipSound, get clipStubs() { return clipStubs; }, bgs,
   setClipLevel, clipLevel, setMainVolume, volTarget, nudgeVolume, vrNotice, hud, hcanvas, get current() { return current; },
+  addLink, retryLink, startShare, endShare, removeBg, get links() { return links; }, get bgId() { return S.bgId; },
   drawPanel: () => { drawPanel(new Set()); return pcanvas.toDataURL('image/png'); },
 };
 </script>
