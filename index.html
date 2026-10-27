@@ -295,9 +295,12 @@ h2{font-family:var(--display);font-weight:700;font-size:20px;letter-spacing:-.01
           <legend>Slideshows</legend>
           <div class="wallsadd">
             <button id="showNew" class="btn small primary" type="button">New slideshow</button>
-            <span class="fine" style="margin:0">or drop pictures here to start one</span>
+            <label class="btn small" for="folderInput" tabindex="0">Slideshow from folder</label>
+            <input id="folderInput" type="file" webkitdirectory multiple hidden>
+            <span class="fine" style="margin:0">or drop pictures or folders here</span>
           </div>
           <p class="fine">A slideshow is a frame that cycles through its own pictures and video clips. Hang it and move it like any picture. Video clips play to the end before it moves on, and a picture or clip can be in several slideshows.</p>
+          <p class="fine">A folder becomes a slideshow named after it, and each subfolder becomes one too. Folder pictures stay inside their slideshow: they don't show up in Backdrops or the photo wall, they load only when it's their turn, and deleting the slideshow deletes them.</p>
           <ul class="showlist" id="showList"></ul>
         </fieldset>
       </div>
@@ -393,8 +396,10 @@ const idb = (() => {
   const run = async (mode, fn) => { const db = await open(); return new Promise((res, rej) => { const t = db.transaction('bgs', mode); const req = fn(t.objectStore('bgs')); t.oncomplete = () => res(req && req.result); t.onerror = () => rej(t.error); }); };
   return {
     all: async () => { try { return (await run('readonly', s => s.getAll())) || []; } catch (e) { return []; } },
-    put: async (rec) => { try { await run('readwrite', s => s.put(rec)); } catch (e) { } },
+    put: async (rec) => { try { await run('readwrite', s => s.put(rec)); return true; } catch (e) { return false; } },
     del: async (id) => { try { await run('readwrite', s => s.delete(id)); } catch (e) { } },
+    putMany: async (recs) => { try { await run('readwrite', s => { for (const r of recs) s.put(r); }); return true; } catch (e) { return false; } },
+    delMany: async (ids) => { try { await run('readwrite', s => { for (const id of ids) s.delete(id); }); } catch (e) { } },
   };
 })();
 
@@ -721,12 +726,18 @@ function thumbOf(src) {
   const s = Math.max(320 / sw, 160 / sh); g.drawImage(src, (320 - sw * s) / 2, (160 - sh * s) / 2, sw * s, sh * s);
   return c.toDataURL('image/jpeg', 0.8);
 }
-function bgTexture(src) {
-  const tex = new THREE.Texture(src); tex.needsUpdate = true;
+function emptyTex() {
+  const tex = new THREE.Texture();
   tex.colorSpace = THREE.NoColorSpace; tex.generateMipmaps = true;
   tex.minFilter = THREE.LinearMipmapLinearFilter; tex.magFilter = THREE.LinearFilter;
   tex.anisotropy = Math.min(4, maxAniso);
   return tex;
+}
+function bgTexture(src) { const tex = emptyTex(); tex.image = src; tex.needsUpdate = true; return tex; }
+// WebGL ignores the vertical flip for ImageBitmaps (they'd show upside down), so draw them into a canvas.
+function bitmapToCanvas(bmp) {
+  const c = document.createElement('canvas'); c.width = bmp.width; c.height = bmp.height;
+  c.getContext('2d').drawImage(bmp, 0, 0); bmp.close(); return c;
 }
 function seeded(seed) { let s = seed >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
 function makeDusk() {
@@ -787,12 +798,12 @@ async function bgFromBlob(blob, name, id, kind) {
     w = img.naturalWidth; h = img.naturalHeight; src = img;
     if (w > maxTex || h > maxTex) {
       const s = maxTex / Math.max(w, h), rw = Math.round(w * s), rh = Math.round(h * s);
-      try { src = await createImageBitmap(blob, { resizeWidth: rw, resizeHeight: rh, resizeQuality: 'high' }); }
+      try { src = bitmapToCanvas(await createImageBitmap(blob, { resizeWidth: rw, resizeHeight: rh, resizeQuality: 'high' })); }
       catch (e) { const c = document.createElement('canvas'); c.width = rw; c.height = rh; c.getContext('2d').drawImage(img, 0, 0, rw, rh); src = c; }
     }
   } catch (e) {
     // Very large pictures can fail to load whole on the headset; ask for a scaled-down decode instead.
-    src = await createImageBitmap(blob, { resizeWidth: maxTex, resizeQuality: 'high' }).catch(() => { throw new Error('decode'); });
+    src = bitmapToCanvas(await createImageBitmap(blob, { resizeWidth: maxTex, resizeQuality: 'high' }).catch(() => { throw new Error('decode'); }));
     w = src.width; h = src.height;
   }
   return { id, name, kind, tex: bgTexture(src), aspect: w / h, avg: averageColor(src), thumb: thumbOf(src), url };
@@ -1090,7 +1101,7 @@ const PW_HALF_H = 52;    // degrees up and down from eye level
 const PW_ASPECT = (PW_SPAN * Math.PI / 180) / (2 * Math.tan(PW_HALF_H * Math.PI / 180));
 const photoWall = { id: 'photowall', name: 'Photo wall', kind: 'auto', tex: null, aspect: PW_ASPECT, avg: [0.06, 0.065, 0.075], thumb: null, cyl: true, count: 0 };
 bgs.push(photoWall);
-const wallPictures = () => bgs.filter(b => (b.kind === 'user' || b.kind === 'bundled') && b.tex && b.tex.image && !isClip(b));
+const wallPictures = () => bgs.filter(b => (b.kind === 'user' || b.kind === 'bundled') && !b.owner && b.tex && b.tex.image && !isClip(b));
 // Justified rows: pick the row count whose natural height is closest to the space available.
 function justifiedRows(aspects, W, H, gap) {
   const N = aspects.length, total = aspects.reduce((a, b) => a + b, 0);
@@ -1178,7 +1189,7 @@ const SLIDE_FADE = 0.8, SLIDE_MAX = ON_HEADSET ? 2048 : 3072;
 let shows = (store.get('shows', []) || []).filter(x => x && x.id).map(x => ({ name: 'Slideshow', pics: [], interval: 8, shape: '3:2', fit: 'contain', order: 'seq', ...x }));
 const showById = (id) => shows.find(x => x.id === id);
 const saveShows = () => store.set('shows', shows);
-const showPics = (sh) => sh.pics.map(bgById).filter(b => b && b.tex && b.tex.image);
+const showPics = (sh) => sh.pics.map(bgById).filter(b => b && (b.lazy || (b.tex && b.tex.image)));
 const showAspect = (sh) => (SHAPES[sh && sh.shape] || SHAPES['3:2'])[1];
 // Slides use their own smaller textures (only the current and next are kept), so long slideshows stay light on the Quest.
 const slideCache = new Map();
@@ -1187,17 +1198,35 @@ function slideTex(picId) {
   if (isClip(cb)) { restartClip(cb); return cb.tex; }   // clips use their own live video texture, from the start
   let e = slideCache.get(picId);
   if (!e) {
-    const b = bgById(picId); if (!b || !b.tex || !b.tex.image) return null;
-    const img = b.tex.image, iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
-    const k = Math.min(1, SLIDE_MAX / Math.max(iw, ih));
-    let src = img;
-    if (k < 1) { const c = document.createElement('canvas'); c.width = Math.round(iw * k); c.height = Math.round(ih * k); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); src = c; }
-    e = { tex: bgTexture(src), refs: 0 }; slideCache.set(picId, e);
+    const b = bgById(picId); if (!b) return null;
+    if (b.lazy) {   // a folder picture: decoded now, in the background
+      e = { tex: emptyTex(), refs: 0, ready: false }; slideCache.set(picId, e); loadLazySlide(b, e);
+    } else {
+      if (!b.tex || !b.tex.image) return null;
+      const img = b.tex.image, iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
+      const k = Math.min(1, SLIDE_MAX / Math.max(iw, ih));
+      let src = img;
+      if (k < 1) { const c = document.createElement('canvas'); c.width = Math.round(iw * k); c.height = Math.round(ih * k); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); src = c; }
+      e = { tex: bgTexture(src), refs: 0, ready: true }; slideCache.set(picId, e);
+    }
   }
   e.refs++;
   return e.tex;
 }
-function releaseSlide(picId) { if (isClip(bgById(picId))) return; const e = picId && slideCache.get(picId); if (!e) return; if (--e.refs <= 0) { e.tex.dispose(); slideCache.delete(picId); } }
+function releaseSlide(picId) { if (!picId || isClip(bgById(picId))) return; const e = slideCache.get(picId); if (!e) return; if (--e.refs <= 0) { e.gone = true; e.tex.dispose(); slideCache.delete(picId); } }
+// Decode a folder picture at slide size, straight from its stored file.
+async function loadLazySlide(b, e) {
+  try {
+    const a = b.aspect || 1.5, rw = a >= 1 ? SLIDE_MAX : Math.round(SLIDE_MAX * a), rh = a >= 1 ? Math.round(SLIDE_MAX / a) : SLIDE_MAX;
+    const bmp = await createImageBitmap(b.blob, { resizeWidth: Math.max(1, rw), resizeHeight: Math.max(1, rh), resizeQuality: 'high', imageOrientation: 'from-image' });
+    if (e.gone) { bmp.close(); return; }
+    e.tex.image = bitmapToCanvas(bmp); e.tex.needsUpdate = true;
+  } catch (err) { e.failed = true; }
+  e.ready = true;
+}
+// Can this slide be shown yet / is it worth switching to?
+const slideReady = (id) => { if (isClip(bgById(id))) return true; const e = slideCache.get(id); return !!(e && e.ready); };
+const slideOk = (id) => { if (isClip(bgById(id))) return true; const e = slideCache.get(id); return !!(e && e.ready && !e.failed); };
 const SLIDE_FS = `precision highp float;
 uniform sampler2D uA; uniform sampler2D uB; uniform bool uHasA; uniform bool uHasB;
 uniform vec2 uAS; uniform vec2 uBS; uniform float uMix; uniform float uDim; uniform vec3 uMat;
@@ -1224,7 +1253,7 @@ function fitScale(P, F, fit) {
 const slideScale = (picId, sh) => fitScale((bgById(picId) || {}).aspect || 1.5, showAspect(sh), sh.fit);
 function clearSlides(o) {
   const sl = o.slide, u = o.picMat.uniforms;
-  releaseSlide(sl.a); releaseSlide(sl.b); sl.a = sl.b = null; sl.fading = false; sl.t = 0;
+  releaseSlide(sl.a); releaseSlide(sl.b); releaseSlide(sl.next); sl.a = sl.b = sl.next = null; sl.fading = false; sl.t = 0;
   u.uA.value = u.uB.value = null; u.uHasA.value = u.uHasB.value = false; u.uMix.value = 0;
 }
 function nextSlideId(sh, pics, cur) {
@@ -1240,10 +1269,11 @@ function tickSlides(dt) {
     const sl = o.slide, u = o.picMat.uniforms, pics = showPics(sh);
     if (!pics.length) { if (sl.a || sl.b) clearSlides(o); continue; }
     if (!sl.a || !pics.some(p => p.id === sl.a)) {   // first picture, or the current one left the slideshow
-      clearSlides(o); sl.a = pics[0].id; u.uA.value = slideTex(sl.a); u.uHasA.value = !!u.uA.value;
+      clearSlides(o); sl.a = pics[0].id; u.uA.value = slideTex(sl.a);
     }
+    u.uHasA.value = !!u.uA.value && slideOk(sl.a);   // folder pictures show once they've loaded
     u.uAS.value.set(...slideScale(sl.a, sh));
-    if (sl.b) u.uBS.value.set(...slideScale(sl.b, sh));
+    if (sl.b) { u.uBS.value.set(...slideScale(sl.b, sh)); u.uHasB.value = !!u.uB.value && slideOk(sl.b); }
     if (sl.fading) {
       u.uMix.value = Math.min(1, u.uMix.value + dt / SLIDE_FADE);
       if (u.uMix.value >= 1) {
@@ -1252,6 +1282,9 @@ function tickSlides(dt) {
         u.uB.value = null; u.uHasB.value = false; u.uMix.value = 0; sl.fading = false; sl.t = 0;
       }
     } else if (pics.length > 1) {
+      // Line up the next slide early, so a picture that loads on demand is ready when its turn comes.
+      if (sl.next && !pics.some(p => p.id === sl.next)) { releaseSlide(sl.next); sl.next = null; }
+      if (!sl.next) { sl.next = nextSlideId(sh, pics, sl.a); sl.nextTex = slideTex(sl.next); }
       sl.t += dt;
       const ca = bgById(sl.a);
       let due = sl.t >= sh.interval;
@@ -1261,13 +1294,13 @@ function tickSlides(dt) {
         due = ct >= ca.el.duration - SLIDE_FADE - 0.05 || (sl.lastCT !== undefined && ct < sl.lastCT - 0.5);
         sl.lastCT = ct;
       }
-      if (due || sl.skip) {
+      if ((due || sl.skip) && slideReady(sl.next)) {
         sl.skip = false; sl.lastCT = undefined;
-        const to = nextSlideId(sh, pics, sl.a);
-        sl.b = to; u.uB.value = slideTex(to); u.uHasB.value = !!u.uB.value; u.uBS.value.set(...slideScale(to, sh));
+        const to = sl.next; sl.next = null;
+        sl.b = to; u.uB.value = sl.nextTex; sl.nextTex = null; u.uHasB.value = !!u.uB.value && slideOk(to); u.uBS.value.set(...slideScale(to, sh));
         u.uMix.value = 0; sl.fading = true; sl.t = 0;
       }
-    }
+    } else if (sl.next) { releaseSlide(sl.next); sl.next = null; sl.nextTex = null; }
   }
 }
 function skipSlide(wallId) { const o = wallObjs.get(wallId); if (o && o.slide && !o.slide.fading) o.slide.skip = true; }
@@ -1325,7 +1358,8 @@ function setWallHighlight(ids) {
   }
 }
 const saveWalls = () => store.set('walls', walls);
-const hangable = () => bgs.filter(b => b.tex && b.kind !== 'auto');
+const hangable = () => bgs.filter(b => b.tex && b.kind !== 'auto' && !b.owner);
+const backdrops = () => bgs.filter(b => !b.owner);   // what the Backdrops grid and the VR backdrop switcher offer
 // Everything that can be hung: slideshows first, then single pictures. ref is 'show:<id>' or a picture id.
 const hangItems = () => [
   ...shows.map(sh => ({ ref: 'show:' + sh.id, show: sh, name: 'Slideshow: ' + sh.name + ' (' + showPics(sh).length + ')', short: 'Slideshow: ' + sh.name })),
@@ -1428,10 +1462,11 @@ function syncWallInputs(w) {
 }
 let vrPick = 0;
 
-const openPickers = new Set();
-function newShow(picIds = []) {
-  let n = shows.length + 1; while (shows.some(x => x.name === 'Slideshow ' + n)) n++;
-  const sh = { id: 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: 'Slideshow ' + n, pics: [...new Set(picIds)], interval: 8, shape: '3:2', fit: 'contain', order: 'seq' };
+const openPickers = new Set(), openStrips = new Set();
+function newShow(picIds = [], name = '', extra = {}) {
+  if (name) { let n = 2, nm = name; while (shows.some(x => x.name === nm)) nm = name + ' ' + n++; name = nm; }
+  else { let n = shows.length + 1; while (shows.some(x => x.name === 'Slideshow ' + n)) n++; name = 'Slideshow ' + n; }
+  const sh = { id: 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name, pics: [...new Set(picIds)], interval: 8, shape: '3:2', fit: 'contain', order: 'seq', ...extra };
   shows.push(sh); saveShows(); renderShows(); renderWallPick(); panelDirty = true;
   return sh;
 }
@@ -1453,16 +1488,149 @@ function updateShow(id, patch) {
   panelDirty = true;
 }
 function deleteShow(id) {
-  shows = shows.filter(x => x.id !== id); openPickers.delete(id); saveShows();
+  shows = shows.filter(x => x.id !== id); openPickers.delete(id); openStrips.delete(id); saveShows();
   if (walls.some(w => w.show === id)) { walls = walls.filter(w => w.show !== id); saveWalls(); syncWallObjs(); renderWallList(); }
+  dropOwned(id);
   renderShows(); renderWallPick(); panelDirty = true;
 }
+// Forget a folder slideshow's own pictures and clips, from memory and from the browser's storage.
+function dropOwned(showId) {
+  const mine = bgs.filter(b => b.owner === showId); if (!mine.length) return;
+  for (const b of mine) {
+    bgs.splice(bgs.indexOf(b), 1);
+    if (isClip(b)) { disposeClip(b); delete clipSound[b.id]; delete clipVol[b.id]; }
+    const e = slideCache.get(b.id); if (e) { e.gone = true; e.tex.dispose(); slideCache.delete(b.id); }
+  }
+  store.set('clipSound', clipSound); store.set('clipVol', clipVol);
+  idb.delMany(mine.map(b => b.id));
+}
 async function addFilesToShow(id, files) {
+  const fsh = showById(id);
+  if (fsh && fsh.folder) { await importFolders([{ name: fsh.name, files, into: fsh }]); return; }
   const added = await addImages(files, { show: id });
   const sh = showById(id); if (!sh || !added.length) return;
   addToShow(id, added.map(b => b.id));
   toast(added.length + (added.length === 1 ? ' item' : ' items') + ' added to ' + sh.name + '.');
 }
+/* ---------- folders: each folder (and each subfolder) with pictures or clips becomes its own slideshow ---------- */
+// Folder pictures live only in their slideshow: a small thumbnail and their shape are kept,
+// and the picture itself is decoded only when its slide comes up.
+async function ownedPicFromFile(file, name, id, owner) {
+  if (isHeic(file)) throw new Error('heic');
+  const bmp = await createImageBitmap(file, { resizeWidth: 480, resizeQuality: 'medium', imageOrientation: 'from-image' });
+  const aspect = bmp.width / bmp.height, thumb = thumbOf(bmp); bmp.close();
+  return { id, name, kind: 'user', owner, blob: file, aspect, thumb, tex: null, lazy: true, avg: [0.1, 0.1, 0.1] };
+}
+const natCmp = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }).compare;
+const isJunkFile = (name) => /^\./.test(name) || /^(thumbs\.db|desktop\.ini)$/i.test(name);
+// [{ path: 'Trips/Paris/1.jpg', file }] -> [{ name: 'Paris', files }], one per folder that has pictures or clips.
+function groupByFolder(entries) {
+  const groups = new Map();
+  for (const en of entries) {
+    const parts = en.path.split('/').filter(Boolean), fname = parts.pop() || en.file.name;
+    if (isJunkFile(fname) || !isMediaFile(en.file)) continue;
+    const dir = parts.join('/');
+    if (!groups.has(dir)) groups.set(dir, []);
+    groups.get(dir).push(en);
+  }
+  const dirs = [...groups.keys()].sort(natCmp), base = (d) => d.split('/').pop();
+  return dirs.map((d) => {
+    const twin = dirs.filter(x => base(x) === base(d)).length > 1, parts = d.split('/');
+    const name = twin && parts.length > 1 ? parts.slice(-2).join(' / ') : base(d);
+    return { name, files: groups.get(d).sort((a, b) => natCmp(a.path, b.path)).map(x => x.file) };
+  });
+}
+// A frame shape that suits most of the pictures.
+function shapeFor(aspects) {
+  if (!aspects.length) return '3:2';
+  const m = [...aspects].sort((a, b) => a - b)[Math.floor(aspects.length / 2)];
+  return m < 0.85 ? '2:3' : m < 1.15 ? '1:1' : m > 1.65 ? '16:9' : '3:2';
+}
+let importing = false;
+const IMPORT_BATCH = 6;
+// One file from a folder -> { b, rec } ready to keep, or { skip } (throws for files that can't be opened).
+async function prepFolderFile(f, owner) {
+  const name = f.name.replace(/\.[^.]+$/, ''), vid = isVideoFile(f);
+  const id = (vid ? 'c' : 'u') + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  if (vid) {
+    if (f.size > CLIP_SAVE_MAX) return { skip: 'big' };
+    const b = await clipFromBlob(f, name, id, { saved: true }); b.owner = owner;
+    return { b, rec: { id, name, blob: f, added: Date.now(), media: 'video', owner } };
+  }
+  const b = await ownedPicFromFile(f, name, id, owner);
+  return { b, rec: { id, name, blob: f, added: Date.now(), owner, aspect: b.aspect, thumb: b.thumb } };
+}
+// groups: [{ name, files, into? }] — `into` adds to an existing folder slideshow instead of making one.
+async function importFolders(groups) {
+  groups = groups.filter(g => g.files.length);
+  if (!groups.length) { toast('No pictures or video clips in that folder.'); return []; }
+  if (importing) { toast('Still adding the last folder. Try again when it’s done.'); return []; }
+  importing = true;
+  const made = [], skip = { heic: 0, bad: 0, big: 0 }, total = groups.reduce((n, g) => n + g.files.length, 0);
+  let done = 0, full = false;
+  try {
+    for (const g of groups) {
+      const sh = g.into || newShow([], g.name, { folder: true });
+      const aspects = [];
+      let n = 0;
+      toast('Adding ' + sh.name + ': ' + done + ' / ' + total + '…', 60000);
+      // A few at a time: decoding runs in the background, and each batch is saved in one go. Order is kept.
+      for (let i = 0; i < g.files.length && !full; i += IMPORT_BATCH) {
+        const batch = g.files.slice(i, i + IMPORT_BATCH);
+        const res = await Promise.all(batch.map(f => prepFolderFile(f, sh.id).catch(e => ({ err: e }))));
+        for (const r of res) { if (r.skip === 'big') skip.big++; else if (r.err) { if (r.err.message === 'heic') skip.heic++; else skip.bad++; } }
+        const good = res.filter(r => r.b);
+        if (good.length && !(await idb.putMany(good.map(r => r.rec)))) { for (const r of good) if (isClip(r.b)) disposeClip(r.b); full = true; break; }
+        for (const r of good) { bgs.push(r.b); sh.pics.push(r.b.id); aspects.push(r.b.aspect); n++; }
+        done += batch.length;
+        toast('Adding ' + sh.name + ': ' + done + ' / ' + total + '…', 60000);
+        if ((i / IMPORT_BATCH) % 4 === 3) { saveShows(); renderShows(); }
+      }
+      if (!g.into && n) sh.shape = shapeFor(aspects);
+      saveShows();
+      if (n) made.push({ sh, n });
+      else if (!g.into) deleteShow(sh.id);
+      if (full) break;
+    }
+  } finally { importing = false; }
+  renderShows(); renderWallPick(); renderWallList(); panelDirty = true;
+  const into = groups.length === 1 && groups[0].into;
+  let msg = !made.length ? 'Nothing could be added from that folder.'
+    : into ? made[0].n + (made[0].n === 1 ? ' item' : ' items') + ' added to ' + made[0].sh.name + '.'
+    : made.length === 1 ? 'Made the slideshow ' + made[0].sh.name + ' with ' + made[0].n + (made[0].n === 1 ? ' item.' : ' items.') + ' Use its Hang button, or hang it from the VR menu.'
+    : 'Made ' + made.length + ' slideshows: ' + made.slice(0, 6).map(m => m.sh.name + ' (' + m.n + ')').join(', ') + (made.length > 6 ? ' and ' + (made.length - 6) + ' more' : '') + '.';
+  if (skip.heic) msg += ' Skipped ' + skip.heic + ' iPhone HEIC ' + (skip.heic === 1 ? 'photo' : 'photos') + ' (save as JPG to use them).';
+  if (skip.big) msg += ' Skipped ' + skip.big + (skip.big === 1 ? ' video' : ' videos') + ' over 300 MB.';
+  if (skip.bad) msg += ' ' + skip.bad + (skip.bad === 1 ? ' file' : ' files') + ' couldn’t be opened.';
+  if (full) msg += ' The browser’s storage is full, so the rest weren’t added.';
+  toast(msg, 9000);
+  return made.map(m => m.sh);
+}
+// A dropped folder: walk it (subfolders too) into [{ path, file }].
+async function walkEntry(entry, out) {
+  if (entry.isFile) {
+    const file = await new Promise((res, rej) => entry.file(res, rej)).catch(() => null);
+    if (file) out.push({ path: entry.fullPath.replace(/^\/+/, ''), file });
+  } else if (entry.isDirectory) {
+    const reader = entry.createReader();
+    for (;;) {
+      const batch = await new Promise((res, rej) => reader.readEntries(res, rej)).catch(() => []);
+      if (!batch.length) break;
+      for (const en of batch) await walkEntry(en, out);
+    }
+  }
+}
+// Dropping folders anywhere on the page makes slideshows from them (checked before the other drop targets).
+window.addEventListener('drop', (e) => {
+  const items = e.dataTransfer && e.dataTransfer.items ? [...e.dataTransfer.items] : [];
+  const entries = items.map(i => (i.kind === 'file' && i.webkitGetAsEntry) ? i.webkitGetAsEntry() : null).filter(Boolean);
+  if (!entries.some(en => en.isDirectory)) return;
+  e.preventDefault(); e.stopPropagation();
+  for (const el of document.querySelectorAll('.drop')) el.classList.remove('drop');
+  toast('Reading the folder…', 60000);
+  (async () => { const out = []; for (const en of entries) await walkEntry(en, out); importFolders(groupByFolder(out)); })();
+}, true);
+
 function dropZone(el, onFiles, accept = isMediaFile) {
   el.addEventListener('dragover', (e) => { if ([...e.dataTransfer.types].includes('Files')) { e.preventDefault(); e.stopPropagation(); el.classList.add('drop'); } });
   el.addEventListener('dragleave', (e) => { if (!el.contains(e.relatedTarget)) el.classList.remove('drop'); });
@@ -1483,7 +1651,7 @@ function selectRow(id, label, value, options, onChange) {
 function renderShows() {
   const ul = $('showList'); ul.textContent = '';
   if (!shows.length) { const li = document.createElement('li'); li.className = 'walls-empty'; li.textContent = 'No slideshows yet.'; ul.appendChild(li); return; }
-  const library = bgs.filter(b => (b.kind === 'user' || b.kind === 'bundled') && b.tex);
+  const library = bgs.filter(b => (b.kind === 'user' || b.kind === 'bundled') && b.tex && !b.owner);
   for (const sh of shows) {
     const li = document.createElement('li'); li.className = 'show';
     const pics = showPics(sh);
@@ -1498,19 +1666,30 @@ function renderShows() {
     const del = document.createElement('button'); del.type = 'button'; del.className = 'sdel'; del.textContent = 'Delete';
     del.addEventListener('click', () => {
       if (del.classList.contains('armed')) { deleteShow(sh.id); return; }
-      del.classList.add('armed'); del.textContent = 'Click again to delete';
+      const nOwn = bgs.filter(b => b.owner === sh.id).length;
+      del.classList.add('armed'); del.textContent = nOwn ? 'Click again: deletes its ' + nOwn + (nOwn === 1 ? ' item' : ' items') + ' too' : 'Click again to delete';
       setTimeout(() => { del.classList.remove('armed'); del.textContent = 'Delete'; }, 3000);
     });
     head.append(nm, cnt, del); li.appendChild(head);
     // its pictures
     const strip = document.createElement('div'); strip.className = 'sstrip';
     if (!pics.length) { const e = document.createElement('div'); e.className = 'sempty'; e.textContent = 'Drop pictures or video clips here, or use the buttons below.'; strip.appendChild(e); }
-    for (const b of pics) {
+    const STRIP_MAX = 30, folded = pics.length > STRIP_MAX && !openStrips.has(sh.id);
+    for (const b of folded ? pics.slice(0, STRIP_MAX - 1) : pics) {
       const t = document.createElement('div'); t.className = 'sthumb' + (isClip(b) ? ' vid' : ''); t.title = b.name;
-      const img = document.createElement('img'); img.src = b.thumb; img.alt = '';
-      const x = document.createElement('button'); x.type = 'button'; x.className = 'x'; x.textContent = '×'; x.setAttribute('aria-label', 'Remove ' + b.name + ' from ' + sh.name);
-      x.addEventListener('click', () => removeFromShow(sh.id, b.id));
+      const img = document.createElement('img'); img.src = b.thumb; img.alt = ''; img.loading = 'lazy';
+      const own = b.owner === sh.id;
+      const x = document.createElement('button'); x.type = 'button'; x.className = 'x'; x.textContent = '×';
+      x.setAttribute('aria-label', own ? 'Delete ' + b.name : 'Remove ' + b.name + ' from ' + sh.name);
+      if (own) x.title = 'Delete this picture';
+      x.addEventListener('click', () => own ? removeBg(b) : removeFromShow(sh.id, b.id));
       t.append(img, x); strip.appendChild(t);
+    }
+    if (pics.length > STRIP_MAX) {
+      const more = document.createElement('button'); more.type = 'button'; more.className = 'btn small ghost';
+      more.textContent = folded ? 'Show all ' + pics.length : 'Show fewer';
+      more.addEventListener('click', () => { if (openStrips.has(sh.id)) openStrips.delete(sh.id); else openStrips.add(sh.id); renderShows(); });
+      strip.appendChild(more);
     }
     li.appendChild(strip);
     // settings
@@ -1892,7 +2071,7 @@ function removeVideo(v) {
 }
 function renderBgGrid() {
   const grid = $('bgGrid'); grid.textContent = '';
-  for (const b of bgs) {
+  for (const b of backdrops()) {
     const t = document.createElement('div'); t.className = 'bgtile' + (b.id === S.bgId ? ' on' : '');
     t.tabIndex = 0; t.setAttribute('role', 'button'); t.setAttribute('aria-label', 'Backdrop: ' + b.name);
     const img = document.createElement(b.thumb ? 'img' : 'span'); img.className = 'thumb';
@@ -2048,6 +2227,11 @@ $('wallAdd').addEventListener('click', () => {
   const w = addWall(ref, view.yaw * 180 / Math.PI, view.pitch * 180 / Math.PI);
   if (w) toast('Hung ' + refName(ref) + '. Adjust it below, or move it with the controller in VR.');
 });
+$('folderInput').addEventListener('change', (e) => {
+  const files = [...e.target.files]; e.target.value = '';
+  if (files.length) importFolders(groupByFolder(files.map(f => ({ path: f.webkitRelativePath || f.name, file: f }))));
+});
+document.querySelector('label[for="folderInput"]').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('folderInput').click(); } });
 $('showNew').addEventListener('click', () => { const sh = newShow(); setTimeout(() => { const el = $('sn-' + sh.id); if (el) { el.focus(); el.select(); } }, 0); });
 // Dropping pictures or clips on the Backdrops list adds them to the library.
 dropZone($('bgGrid').closest('section'), (files) => addImages(files));
@@ -2227,10 +2411,10 @@ function panelItems() {
     it.push({ type: 'slider', id: 's-' + k, x: i % 2 ? 616 : 40, y: y + Math.floor(i / 2) * 64, w: 544, h: 58, label, min, max, key: k, fmt });
   });
   y += Math.ceil(keys.length / 2) * 64 + 8;
-  const bi = Math.max(0, bgs.findIndex(b => b.id === S.bgId));
-  B('bgprev', 40, y, 110, 60, '◀', () => setS({ bgId: bgs[(bi - 1 + bgs.length) % bgs.length].id }), { fs: 30 });
-  it.push({ type: 'label', id: 'bgname', x: 166, y, w: 868, h: 60, label: 'Backdrop: ' + (bgs[bi] ? bgs[bi].name : 'None') + '   (' + (bi + 1) + ' / ' + bgs.length + ')' });
-  B('bgnext', 1050, y, 110, 60, '▶', () => setS({ bgId: bgs[(bi + 1) % bgs.length].id }), { fs: 30 });
+  const bl = backdrops(), bi = Math.max(0, bl.findIndex(b => b.id === S.bgId));
+  B('bgprev', 40, y, 110, 60, '◀', () => setS({ bgId: bl[(bi - 1 + bl.length) % bl.length].id }), { fs: 30 });
+  it.push({ type: 'label', id: 'bgname', x: 166, y, w: 868, h: 60, label: 'Backdrop: ' + (bl[bi] ? bl[bi].name : 'None') + '   (' + (bi + 1) + ' / ' + bl.length + ')' });
+  B('bgnext', 1050, y, 110, 60, '▶', () => setS({ bgId: bl[(bi + 1) % bl.length].id }), { fs: 30 });
   y += 94;
 
   Hd('PICTURES AROUND YOU', y); y += 18;
@@ -2567,7 +2751,17 @@ renderer.setAnimationLoop(() => {
 async function boot() {
   const saved = await idb.all();
   saved.sort((a, b) => (a.added || 0) - (b.added || 0));
+  const orphans = [];
   for (const rec of saved) {
+    // Folder slideshow pictures: nothing to decode yet, just their thumbnail and shape. (Clips load as usual.)
+    if (rec.owner) {
+      if (!showById(rec.owner)) { orphans.push(rec.id); continue; }
+      try {
+        if (rec.media === 'video') { const b = await clipFromBlob(rec.blob, rec.name, rec.id, { saved: true }); b.owner = rec.owner; bgs.push(b); }
+        else bgs.push({ id: rec.id, name: rec.name, kind: 'user', owner: rec.owner, blob: rec.blob, aspect: rec.aspect || 1.5, thumb: rec.thumb || null, tex: null, lazy: true, avg: [0.1, 0.1, 0.1] });
+      } catch (e) { }
+      continue;
+    }
     try {
       bgs.push(rec.media === 'video' ? await clipFromBlob(rec.blob, rec.name, rec.id, { saved: true }) : await bgFromBlob(rec.blob, rec.name, rec.id, 'user'));
       renderBgGrid(); renderWallPick();
@@ -2602,9 +2796,12 @@ async function boot() {
   let pruned = false;
   for (const sh of shows) { const n = sh.pics.length; sh.pics = sh.pics.filter(id => bgById(id) || stubById(id)); if (sh.pics.length !== n) pruned = true; }
   if (pruned) saveShows();
+  if (orphans.length) idb.delMany(orphans);   // pictures from a slideshow that's gone
   buildPhotoWall();
   renderBgGrid(); renderWallPick(); syncWallObjs(); renderWallList(); renderShows(); apply(); syncControls(); panelDirty = true;
+  booted = true;
 }
+let booted = false;
 renderBgGrid(); renderWallPick(); syncWallObjs(); renderWallList(); renderShows(); renderVideoList(); resize();
 selectVideo(0, false);
 demo.play();
@@ -2615,6 +2812,7 @@ window.__greenroom = {
   get walls() { return walls; }, get maskWatch() { return maskWatch; }, get shows() { return shows; }, wallObjs, slideCache, newShow, addToShow, deleteShow, addImages, skipSlide, toggleClipSound, get clipStubs() { return clipStubs; }, bgs,
   setClipLevel, clipLevel, setMainVolume, volTarget, nudgeVolume, vrNotice, hud, hcanvas, get current() { return current; },
   addLink, retryLink, startShare, endShare, removeBg, get links() { return links; }, get bgId() { return S.bgId; },
+  importFolders, groupByFolder, walkEntry, deleteShow, updateShow, showPics, bgFromBlob, get booted() { return booted; },
   drawPanel: () => { drawPanel(new Set()); return pcanvas.toDataURL('image/png'); },
 };
 </script>
